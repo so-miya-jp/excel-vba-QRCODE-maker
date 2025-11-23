@@ -52,3 +52,124 @@ End Function
 Public Function IsBlankRange(ByRef Rng As Range) As Boolean
     IsBlankRange = (WorksheetFunction.CountBlank(Rng) = Rng.Count)
 End Function
+
+'''指定された文字コードでテキストファイルの一括読込を行う
+'''引数
+'''  Result / O / 読み込んだテキストデータ
+'''  Path   / I / 読み込み対象のファイルパス
+'''  charSet/ I / 文字コード
+'''戻り値
+'''  成功した場合はTrue、失敗した場合はFalseを返却
+Public Function ReadTextFile(ByRef Result As String, ByVal Path As String, Optional ByVal charSet As String = "UTF-8") As Boolean
+    Dim buf As String
+
+    ReadTextFile = False
+
+    On Error GoTo ErrProc
+    With CreateObject("ADODB.Stream")
+        .Type = 2
+        .charSet = charSet
+        .Open
+        .LoadFromFile Path
+        Result = .ReadText
+        .Close
+    End With
+    On Error GoTo 0
+
+    If Right(Result, 4) = vbCrLf & vbCrLf Then
+        Result = Left(Result, Len(Result) - 2)
+    End If
+
+    ReadTextFile = True
+    Exit Function
+    
+ErrProc:
+End Function
+
+'''バイナリファイルの一括読込を行う
+'''引数
+'''  Result / O / 読み込んだバイナリデータ
+'''  Path   / I / 読み込み対象のファイルパス
+'''戻り値
+'''  成功した場合はTrue、失敗した場合はFalseを返却
+Public Function ReadBinaryFile(ByRef Result() As Byte, ByVal Path As String) As Boolean
+    Dim buf As String
+
+    ReadBinaryFile = False
+
+    On Error GoTo ErrProc
+    With CreateObject("ADODB.Stream")
+        .Type = 1
+        .Open
+        .LoadFromFile Path
+        Result = .Read
+        .Close
+    End With
+    On Error GoTo 0
+
+    ReadBinaryFile = True
+    Exit Function
+    
+ErrProc:
+End Function
+
+'''指定したバイナリをBase64に変換する
+'''引数
+'''  buf     / I / 入力バイナリ
+'''  folding / I / 改行有無(Trueの場合、入力57byte、出力76文字単位で改行する)
+'''戻り値
+'''  Base64化した文字列
+Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boolean = True) As String
+    Static B64CHR() As String
+    Dim Result As String
+    Dim idx As Long
+    Dim Pos As Integer
+
+    If (Not B64CHR) = -1 Then
+        For idx = Asc("A") To Asc("Z"): AddArrayText B64CHR, Chr(idx): Next idx
+        For idx = Asc("a") To Asc("z"): AddArrayText B64CHR, Chr(idx): Next idx
+        For idx = Asc("0") To Asc("9"): AddArrayText B64CHR, Chr(idx): Next idx
+        AddArrayText B64CHR, "+"
+        AddArrayText B64CHR, "/"
+    End If
+
+    Result = ""
+
+    idx = LBound(buf)
+    Do While idx <= UBound(buf)
+        Pos = Int(buf(idx) / 4)
+        Result = Result & B64CHR(Pos)
+
+        Pos = (buf(idx) Mod 4) * 16
+
+        idx = idx + 1
+        If idx > UBound(buf) Then
+            Result = Result & B64CHR(Pos) & "=="
+            Exit Do
+        End If
+
+        Pos = Pos + Int(buf(idx) / 16)
+        Result = Result & B64CHR(Pos)
+
+        Pos = (buf(idx) Mod 16) * 4
+
+        idx = idx + 1
+        If idx > UBound(buf) Then
+            Result = Result & B64CHR(Pos) & "="
+            Exit Do
+        End If
+
+        Pos = Pos + Int(buf(idx) / 64)
+        Result = Result & B64CHR(Pos)
+
+        Pos = buf(idx) Mod 64
+        Result = Result & B64CHR(Pos)
+
+        idx = idx + 1
+
+        If folding And idx Mod 57 = 0 Then '19 * 4 = 76, 19 * 3 = 57
+            Result = Result & vbLf
+        End If
+    Loop
+    ConvertBase64 = Result
+End Function

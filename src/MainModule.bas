@@ -50,6 +50,7 @@ Private Sub OutputRange(ByRef pRng As Range, ByRef ar() As Variant)
 End Sub
 
 Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Optional ByVal charSet As String = "UTF-8", Optional ByVal pECL As eErrorCorrectionLevel = ECL_L) As Boolean
+    Dim buf() As Byte
     Dim Lines() As String
     Dim curText As String, oldText As String
     Dim idx As Long
@@ -57,7 +58,16 @@ Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Option
 
     SplitFile = False
 
-    If Not ReadTextFile(curText, Path, charSet) Then
+    If LCase(charSet) Like "binary*" Then
+        If Not ReadBinaryFile(buf, Path) Then
+            Exit Function
+        End If
+
+        curText = "begin-base64 664 " & Mid(Path, InStrRev(Path, "\") + 1) & vbLf _
+                & ConvertBase64(buf) & vbLf _
+                & "====" & vbLf
+
+    ElseIf Not ReadTextFile(curText, Path, charSet) Then
         Exit Function
     End If
     
@@ -80,29 +90,4 @@ Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Option
     Next idx
     AddArrayText Result, oldText
     SplitFile = True
-End Function
-
-Private Function ReadTextFile(ByRef Result As String, ByVal Path As String, Optional ByVal charSet As String = "UTF-8") As Boolean
-    Dim buf As String
-
-    ReadTextFile = False
-
-    On Error GoTo ErrProc
-    With CreateObject("ADODB.Stream")
-        .charSet = charSet
-        .Open
-        .LoadFromFile Path
-        Result = .ReadText
-        .Close
-    End With
-    On Error GoTo 0
-
-    If Right(Result, 4) = vbCrLf & vbCrLf Then
-        Result = Left(Result, Len(Result) - 2)
-    End If
-
-    ReadTextFile = True
-    Exit Function
-    
-ErrProc:
 End Function

@@ -922,7 +922,6 @@ Private Sub QR_makeArr(ByRef qrParam As tParams, ByRef encArr() As Byte, ByRef q
     With qrParam
         If (Not .syncs) <> -1 Then
             ch = UBound(.syncs)
-            Do While .syncs(ch) = 0: ch = ch - 1: Loop
             For c = 0 To ch
                 For r = 0 To ch
                     If (c <> 0 Or r <> 0) And _

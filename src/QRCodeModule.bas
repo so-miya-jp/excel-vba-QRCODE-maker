@@ -35,6 +35,7 @@ Private Const CC_SIZ_BLKS$ = _
         & "V35X18X57X48" & "V37X19X60X51" & "V38X19X63X53" & "V40X20X66X56" _
         & "V43X21X70X59" & "V45X22X74X62" & "V47X24X77X65" & "V49X25X81X68"
 
+'エラー補正レベル
 Public Enum eErrorCorrectionLevel
     ECL_M = 0
     ECL_L = 1
@@ -42,45 +43,56 @@ Public Enum eErrorCorrectionLevel
     ECL_Q = 3
 End Enum
 
+'モードタイプ
 Private Enum eType
-    TYP_UNKNOWN = 0
-    TYP_NUM = 1
-    TYP_ALNUM = 2
-    TYP_BYTE = 3
-    TYP_KANJI = 4
+    TYP_UNKNOWN = 0 '不明
+    TYP_NUM = 1     '数字モード
+    TYP_ALNUM = 2   '英数字モード(QR_ALNUMのみ)
+    TYP_BYTE = 3    'バイトモード
+    TYP_KANJI = 4   '漢字モード
 End Enum
 
+'モード毎の解析一時保持要素
 Private Type tEcxItem
     Pos As Integer
     Cnt As Integer
 End Type
 
+'エンコードブロック要素(解析結果保持用)
 Private Type tEbItem
     Typ As eType
     Pos As Integer
     Cnt As Integer
 End Type
 
+'QRパラメータ
 Private Type tParams
-    Ver As Integer
-    Siz As Integer
-    ccSiz As Integer
-    ccBlks As Integer
-    ttlByt As Integer
-    syncs() As Integer
-    verInf As Long
+    Ver As Integer      'バージョン
+    Siz As Integer      'サイズ
+    ccSiz As Integer    'CCサイズ
+    ccBlks As Integer   'CCブロック数
+    ttlByt As Integer   'トータルバイトサイズ
+    syncs() As Integer  'シンク情報
+    verInf As Long      'バージョン情報
 End Type
 
 Private IsMs As Boolean
 Private ErrTxt As String
 Public COUNT_LENGTH() As Variant
 
+'''初期化処理
 Private Sub Init()
     IsMs = (VarType(Asc("A")) = vbInteger)
     ErrTxt = ""
     COUNT_LENGTH = [{10, 12, 14; 9, 11, 13; 8, 16, 16; 8, 10, 12}]
 End Sub
 
+'''変換対象文字列をQRコードに変換し、二次元配列に格納します。
+''' @param ar      / O / QRコードを格納する二次元配列
+''' @param pInfo   / O / 補足情報。変換成功時はバージョン文字列、変換失敗時はエラーメッセージを格納する。
+''' @param pTarget / I / 変換対象文字列
+''' @param pECL    / I / エラー補正レベル(省略時はECL_M)
+''' @return 変換成功時はTrueを、それ以外はFalseを返却する。
 Public Function GetQRCode(ByRef ar() As Variant, ByRef pInfo As String, ByVal pTarget As String, Optional ByVal pECL As eErrorCorrectionLevel = ECL_M) As Boolean
     Dim barCode As String
 
@@ -105,6 +117,11 @@ Public Function GetQRCode(ByRef ar() As Variant, ByRef pInfo As String, ByVal pT
 
 End Function
 
+'''指定した変換対象文字列がQRコードに変換可能である場合、1～40のバージョン番号を返却します。
+'''変換不可である場合、0を返却します。
+''' @param pText / I / 変換対象文字列
+''' @param pECL  / I / エラー補正レベル
+''' @return バージョン番号、もしくは0
 Public Function CheckQRCode(ByVal pText As String, ByVal pECL As eErrorCorrectionLevel) As Integer
     Dim eb() As tEbItem
     Dim Ver As Integer
@@ -119,7 +136,9 @@ Public Function CheckQRCode(ByVal pText As String, ByVal pECL As eErrorCorrectio
     CheckQRCode = Ver
 End Function
 
-'指定された文字のUTF-8のバイトコードをLong型で返却する
+'''指定された文字のUTF-8のバイトコードをLong型で返却する
+''' @param ch / I / 文字
+''' @return IsMSがTrueの場合、UTF-8コード。IsMSがFalseのとき、ASCIIコード
 Private Function AscL(ByVal ch As String) As Long
     If IsMs Then
         AscL = AscW(ch)
@@ -129,8 +148,10 @@ Private Function AscL(ByVal ch As String) As Long
     End If
 End Function
 
-'指定された文字がSJISとして表現可能である場合、QRコード用の13bitのバイトコードに変換して返却する。
-'SJISとして表現できない場合、-1を返却する
+'''指定された文字がSJISとして表現可能である場合、QRコード用の13bitのバイトコードに変換して返却する。
+'''SJISとして表現できない場合、-1を返却する
+''' @param ch / I / 文字
+''' @return QRコードの漢字モードの13ビット情報、または-1
 Private Function QR_AscK(ByVal ch As String) As Long
     Dim code As Long
 
@@ -155,12 +176,18 @@ Private Function QR_AscK(ByVal ch As String) As Long
     QR_AscK = Int(code / &H100&) * &HC0& + (code And &HFF&)
 End Function
 
+'''エラー出力
+''' @param msg / I / エラーメッセージ
 Private Sub outErr(ByVal msg As String)
     If ErrTxt <> "" Then ErrTxt = ErrTxt & vbLf
     ErrTxt = ErrTxt & msg
     Debug.Print msg
 End Sub
 
+'''QRコード生成
+''' @param pText / I / 変換対象文字列
+''' @param pECL  / I / エラー補正レベル
+''' @return 生成したQRコード(a～pとvbLfで構成された文字列。a～pは2x2マスのビット状態を指す)
 Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLevel) As String
     Dim encoded1() As Byte
     Dim eb() As tEbItem
@@ -199,6 +226,9 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
     QR_gen = QR_makeAscMtrx(qrParam, qrArr)
 End Function
 
+'''変換対象文字列の解析
+''' @param pText / I / 変換対象文字列
+''' @param eb    / O / 解析結果。モード、位置、桁数を持つ配列
 Private Sub QR_anlyz(ByVal pText As String, ByRef eb() As tEbItem)
     Dim idx As Long
     Dim ch As String
@@ -383,6 +413,12 @@ FIN_KANJI:
     Return
 End Sub
 
+'''ecx情報で指定した2つのタイプのどちらが先行しているかを判定する。
+'''漢字とバイトの判定はCntでは判定できないのでPosで判定する。
+''' @param ecx  / I / ecx情報
+''' @param sTyp / I / 元タイプ
+''' @param dTyp / I / 先タイプ
+''' @return 元タイプが先タイプよりも先行している場合、正の数を返却する。
 Private Function ecxcmp(ByRef ecx() As tEcxItem, ByVal sTyp As eType, ByVal dTyp As eType) As Integer
     If sTyp = TYP_BYTE And dTyp = TYP_KANJI Then
         ecxcmp = ecx(dTyp).Pos - ecx(sTyp).Pos
@@ -395,6 +431,12 @@ Private Function ecxcmp(ByRef ecx() As tEcxItem, ByVal sTyp As eType, ByVal dTyp
     End If
 End Function
 
+'''解析時のecx情報をインクリメントする。
+''' @param ecx   / IO / ecx情報
+''' @param tTyp  / I / モードタイプ
+''' @param idx   / I / 文字位置
+''' @param reset / I / リセットフラグ
+''' @param ltSiz / I / インクリメント文字サイズ(省略時は1)
 Private Sub QR_anlyz_cntLtr(ByRef ecx() As tEcxItem, ByVal tTyp As eType, ByVal idx As Integer, ByVal reset As Boolean, Optional ByVal ltSiz As Integer = 1)
     If reset Then
         ecx(tTyp).Cnt = 0
@@ -405,6 +447,12 @@ Private Sub QR_anlyz_cntLtr(ByRef ecx() As tEcxItem, ByVal tTyp As eType, ByVal 
     ecx(tTyp).Cnt = ecx(tTyp).Cnt + ltSiz
 End Sub
 
+'''解析結果をeb配列に追加格納する
+''' @param eb     / IO / エンコードブロック情報
+''' @param ecx    / I / ecx情報
+''' @param tTyp   / I / 対象モードタイプ
+''' @param sTyp   / I / 除外モードタイプ(省略時はTYP_UNKNOWN)
+''' @param bytSiz / I / 文字毎のバイト数配列(省略可能)
 Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp As eType, Optional ByVal sTyp As eType = TYP_UNKNOWN, Optional ByRef bytSiz As Variant)
     Dim idx As Integer
 
@@ -427,6 +475,8 @@ Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp 
             .Cnt = ecx(tTyp).Cnt
 
         ElseIf IsArray(bytSiz) Then
+            '漢字モード文字列にバイトモード文字列が先行している場合にバイトを出力するときの処理。
+            'SJIS 1文字はUTF-8で3～4byteなので漢字モード文字列手前までのbyte数を再計算する。
             .Cnt = 0
             For idx = ecx(tTyp).Pos To ecx(sTyp).Pos - 1
                 .Cnt = .Cnt + bytSiz(idx)
@@ -438,6 +488,10 @@ Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp 
     End With
 End Sub
 
+'''eb情報をデバッグ情報として出力する。
+''' @param pText   / I / 変換対象文字列
+''' @param eb      / I / エンコードブロック情報
+''' @param qrParam / I / QRパラメタ
 Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrParam As tParams)
     Dim txt$, idx%, ln%, b&, utfCd&, ttlSiz&, ttlBit&
     txt = ""
@@ -476,6 +530,10 @@ Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrPar
     End If
 End Sub
 
+'''QRパラメタをeb情報から確定する。
+''' @param pECL    / I / エラー補正レベル
+''' @param eb      / I / エンコードブロック情報
+''' @param qrParam / O / QRパラメタ
 Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem, ByRef qrParam As tParams)
     Dim Siz As Integer
     Dim ttlByt As Long
@@ -485,7 +543,6 @@ Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem
     Dim syncSiz As Integer
     Dim ccSiz As Integer
     Dim ccBlks As Integer
-    Dim maxSiz(0 To 2) As Long
     Dim Ver As Integer
 
     'init
@@ -531,6 +588,14 @@ Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem
     End With
 End Sub
 
+'''QRパラメタの検索処理
+''' @param pECL   / I / エラー補正レベル
+''' @param eb     / I / エンコードブロック情報
+''' @param Ver    / O / バージョン
+''' @param Siz    / O / サイズ
+''' @param ttlByt / O / トータルバイトサイズ
+''' @param ccSiz  / O / CCサイズ
+''' @param ccBlks / O / CCブロック数
 Private Sub QR_search_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem _
                            , ByRef Ver As Integer, ByRef Siz As Integer, ByRef ttlByt As Long _
                            , ByRef ccSiz As Integer, ByRef ccBlks As Integer)
@@ -587,6 +652,11 @@ Private Sub QR_search_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As 
     Ver = 0
 End Sub
 
+'''モードタイプ毎のビットサイズを計算して返却する。
+''' @param pTyp / I / モードタイプ
+''' @param pCnt / I / 文字数
+''' @param pVer / I / バージョン
+''' @return ヘッダとデータの合計ビット数
 Private Function QR_getBitSize(ByVal pTyp As eType, ByVal pCnt As Integer, ByVal pVer As Integer) As Long
     Dim bitSiz As Long
 
@@ -612,6 +682,10 @@ Private Function QR_getBitSize(ByVal pTyp As eType, ByVal pCnt As Integer, ByVal
     QR_getBitSize = bitSiz
 End Function
 
+'''モードタイプとバージョンを元に文字列長格納ビット数を返却する。
+''' @param pTyp / I / モードタイプ
+''' @param pVer / I / バージョン
+''' @return 文字列長格納ビット数
 Private Function QR_getCntLen(ByVal pTyp As eType, ByVal pVer As Integer) As Integer
     If pVer < 10 Then
         QR_getCntLen = COUNT_LENGTH(pTyp, 1)
@@ -624,6 +698,11 @@ Private Function QR_getCntLen(ByVal pTyp As eType, ByVal pVer As Integer) As Int
     End If
 End Function
 
+'''eb情報を元にバイト配列にエンコードする
+''' @param pText   / I / 変換対象文字列
+''' @param qrParam / I / QRパラメタ
+''' @param eb      / I / エンコードブロック情報
+''' @param encArr  / O / 出力バイト配列
 Private Sub QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() As tEbItem, ByRef encArr() As Byte)
     Dim encIdx As Integer
     Dim r As Integer
@@ -760,8 +839,13 @@ Private Sub QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() 
     QR_rs &H11D, encArr, qrParam.ttlByt - idx, idx, qrParam.ccBlks
 End Sub
 
-'read solomon
-Private Sub QR_rs(pPoly As Integer, encArr() As Byte, ByVal pSize As Integer, ByVal pLen As Integer, ByVal pBlocks As Integer)
+'''read solomon
+''' @param pPoly   / I / GF(256)
+''' @param encArr  / IO / エンコードブロック情報
+''' @param pSize   / I / ブロック全体のサイズ
+''' @param pLen    / I / 全CCサイズ
+''' @param pBlocks / I / ブロック数
+Private Sub QR_rs(ByVal pPoly As Integer, ByRef encArr() As Byte, ByVal pSize As Integer, ByVal pLen As Integer, ByVal pBlocks As Integer)
     Dim v_x As Integer, v_y As Integer, v_z As Integer, v_a As Integer, v_b As Integer
     Dim pA As Integer, rp As Integer
     Dim v_bs As Integer, v_b2c As Integer
@@ -856,6 +940,10 @@ Private Function QR_rs_prod(ByRef poly() As Byte, ByVal pA As Integer, ByVal pB 
     End If
 End Function
 
+'''エンコードバイト情報からQR配列を生成する
+''' @param qrParam / I / QRパラメタ
+''' @param encArr  / I / エンコードバイト情報
+''' @param qrArr   / O / QR配列
 Private Sub QR_makeArr(ByRef qrParam As tParams, ByRef encArr() As Byte, ByRef qrArr() As Byte)
     Dim ch As Integer
     Dim Siz As Integer
@@ -939,6 +1027,12 @@ Private Sub QR_makeArr(ByRef qrParam As tParams, ByRef encArr() As Byte, ByRef q
     End With
 End Sub
 
+'''マスク処理
+''' @param qrArr / IO / QR配列
+''' @param pVal  / I / 設定値
+''' @param pBits / I / ビット数
+''' @param pRow  / I / 開始行
+''' @param pCol  / I / 開始列
 Private Sub QR_mask(ByRef qrArr() As Byte, ByRef pVal As Variant, ByVal pBits As Integer, ByVal pRow As Integer, ByVal pCol As Integer)
     Dim bIdx As Integer
     Dim word As Long
@@ -1081,6 +1175,10 @@ qrf_NextByte:
     Return
 End Sub
 
+'''QR配列にエラーになりにくいXORマスクをかける
+''' @param qrParam / I / QRパラメタ
+''' @param pECL    / I / エラー補正レベル
+''' @param qrArr   / IO / QR配列
 Private Sub QR_maskArr(ByRef qrParam As tParams, ByVal pECL As eErrorCorrectionLevel, ByRef qrArr() As Byte)
     Dim Siz As Integer
     Dim mask As Integer, idx As Integer
@@ -1127,14 +1225,22 @@ Private Sub QR_maskArr_addMM(ByRef qrArr() As Byte, ByVal pECL As eErrorCorrecti
     Next idx
 End Sub
 
-'pMod = 0b000 : (c + r) Mod 2 = 0
-'pMod = 0b001 : r Mod 2 = 0
-'pMod = 0b010 : c Mod 3 = 0
-'pMod = 0b011 : (c + r) Mod 3 = 0
-'pMod = 0b100 : (Int(r / 2) + Int(c / 3)) Mod 2 = 0
-'pMod = 0b101 : (c * r) Mod 2 + (c * r) Mod 3 = 0
-'pMod = 0b110 : ((c * r) Mod 2 + (c * r) Mod 3) Mod 2 = 0
-'pMod = 0b111 : ((c + r) Mod 2 + (c * r) Mod 3) Mod 2 = 0
+'''XORマスクをQR配列にかける
+''' @param qrArr  / IO / QR配列
+''' @param pSiz   / I / QRコードのサイズ
+''' @param pMod   / I / XORマスクパターン
+''' @param pFinal / I / Trueのとき、QR配列にマスクを反映する。Falseのとき、マスクのスコア計算を行う
+''' @return pFinalがFalseのときはマスクスコア。Trueの場合は常に0
+'''
+'''XORマスクパターン
+''' pMod = 0b000 : (c + r) Mod 2 = 0
+''' pMod = 0b001 : r Mod 2 = 0
+''' pMod = 0b010 : c Mod 3 = 0
+''' pMod = 0b011 : (c + r) Mod 3 = 0
+''' pMod = 0b100 : (Int(r / 2) + Int(c / 3)) Mod 2 = 0
+''' pMod = 0b101 : (c * r) Mod 2 + (c * r) Mod 3 = 0
+''' pMod = 0b110 : ((c * r) Mod 2 + (c * r) Mod 3) Mod 2 = 0
+''' pMod = 0b111 : ((c + r) Mod 2 + (c * r) Mod 3) Mod 2 = 0
 Private Function QR_xorMask(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pMod As Integer, ByVal pFinal As Boolean) As Long
     Dim cIdx As Integer, rIdx As Integer
     Dim idx As Integer
@@ -1186,7 +1292,11 @@ Private Function QR_xorMask(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal 
     End If
 End Function
 
-'score computing
+'''XORマスクのスコア計算
+''' @param qrArr / I / QR配列
+''' @param wArr  / I / 作業配列
+''' @param pSiz  / I / QRコードのサイズ
+''' @return スコア
 Private Function QR_xorMask_scoring(ByRef qrArr() As Byte, ByRef wArr() As Byte, ByVal pSiz As Integer) As Long
     Dim score As Long
     Dim bl As Long
@@ -1273,6 +1383,13 @@ Private Function QR_xorMask_scoring(ByRef qrArr() As Byte, ByRef wArr() As Byte,
     QR_xorMask_scoring = score + bl
 End Function
 
+'''ビット計算
+''' @param qrArr / IO /
+''' @param pSiz  / I /
+''' @param pRow  / I /
+''' @param pCol  / I /
+''' @param pBit  / I /
+''' @return Variant
 Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow As Integer, ByVal pCol As Integer, ByVal pBit As Integer)
     Dim idx As Integer
     Dim Value As Integer
@@ -1325,6 +1442,9 @@ Private Sub QR_bch_calc(ByRef data As Long, ByVal poly As Long)
     data = x + rv
 End Sub
 
+'''数値が収まるビット数を計算して返却する
+''' @param Num / I /
+''' @return Integer
 Private Function QR_numbits(ByVal Num As Long) As Integer
     Dim n%, a&
 
@@ -1338,6 +1458,11 @@ Private Function QR_numbits(ByVal Num As Long) As Integer
     QR_numbits = n
 End Function
 
+''' ビット情報をバイト配列に書き込む。
+''' @param pArr / IO / 設定先のバイト配列
+''' @param pPos / IO / ビット単位の書き込み位置。書き込み後、設定長だけ移動する
+''' @param pVal / I / 設定値
+''' @param pLen / I / 設定長
 Private Sub BB_putBits(ByRef pArr() As Byte, ByRef pPos As Integer, ByRef pVal As Variant, ByVal pLen As Integer)
     Dim idx As Integer, sIdx As Integer, bits As Integer
     Dim word As Long
@@ -1412,6 +1537,10 @@ Private Sub BB_putBits(ByRef pArr() As Byte, ByRef pPos As Integer, ByRef pVal A
     Loop
 End Sub
 
+'''QR配列を元にa～pとvbLfで構成されたQRコード表現文字列に変換します。
+''' @param qrParam / I / QRパラメタ
+''' @param qrArr   / I / QR配列
+''' @return QRコード表現文字列
 Private Function QR_makeAscMtrx(ByRef qrParam As tParams, ByRef qrArr() As Byte) As String
     Dim ascMtrx As String
     Dim rIdx As Integer, cIdx As Integer, bIdx As Integer
@@ -1442,6 +1571,10 @@ Private Function QR_makeAscMtrx(ByRef qrParam As tParams, ByRef qrArr() As Byte)
     QR_makeAscMtrx = ascMtrx
 End Function
 
+'''QRコード表現文字列を二次元配列に変換します。
+''' @param pBarCode / I /
+''' @param ar       / O /
+''' @return 成功した場合はTrueを返却する。
 Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As Boolean
     Dim rIdx As Integer, cIdx As Integer, t As Integer
     Dim txt As String, lenTxt As Integer

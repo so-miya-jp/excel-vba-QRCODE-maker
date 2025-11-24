@@ -1,0 +1,14 @@
+stdole : {
+	Description = "OLE Automation"
+	FullPath = "C:\Windows\System32\stdole2.tlb"
+	GUID = "{00020430-0000-0000-C000-000000000046}"
+	Major = "2"
+	Minor = "0"
+}
+Office : {
+	Description = "Microsoft Office 16.0 Object Library"
+	FullPath = "C:\Program Files\Common Files\Microsoft Shared\OFFICE16\MSO.DLL"
+	GUID = "{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}"
+	Major = "2"
+	Minor = "8"
+}

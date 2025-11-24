@@ -1,6 +1,11 @@
 Attribute VB_Name = "MainModule"
 Option Explicit
 
+'''変換対象文字列をQRコードに変換し、指定Rangeに書き込みます。
+''' @param pRng    / IO / QRコード出力先
+''' @param pInfo   / O / エラー情報またはバージョン情報
+''' @param pTarget / I / 変換対象文字列
+''' @param pECL    / I / エラー補正レベル(省略時はECL_L)
 Public Sub WriteQRCode(ByRef pRng As Range, ByRef pInfo As String, ByVal pTarget As String, Optional ByVal pECL As eErrorCorrectionLevel = ECL_L)
     Dim Subject As String
     Dim ar() As Variant
@@ -26,6 +31,10 @@ Public Sub WriteQRCode(ByRef pRng As Range, ByRef pInfo As String, ByVal pTarget
     End If
 End Sub
 
+'''QRコードが格納された二次元配列を指定Rangeに書き込みます。
+'''配列周りに4ドット分の空白を入れます。
+''' @param pRng / IO / 指定Range
+''' @param ar   / I / 黒ドット部分に1が設定された二次元配列
 Private Sub OutputRange(ByRef pRng As Range, ByRef ar() As Variant)
     Dim Rng As Range
     Dim fc As FormatCondition
@@ -49,6 +58,14 @@ Private Sub OutputRange(ByRef pRng As Range, ByRef ar() As Variant)
     End With
 End Sub
 
+'''指定したファイルを指定文字コードで読み込み、QRコードで表現できるサイズで分割します。
+''' @param Result  / O / 分割結果配列
+''' @param Path    / I / 読み込み対象のファイルパス
+''' @param charSet / I / 指定文字コード(省略時は"UTF-8")
+'''                      "binary"で始まる文字列が指定された場合、ファイルパスの指す先を
+'''                      バイナリファイルとして読み込んでBase64化したものを対象とします｡
+''' @param pECL    / I / エラー補正レベル(省略時はECL_L)
+''' @return 成功した場合はTrue
 Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Optional ByVal charSet As String = "UTF-8", Optional ByVal pECL As eErrorCorrectionLevel = ECL_L) As Boolean
     Dim buf() As Byte
     Dim Lines() As String

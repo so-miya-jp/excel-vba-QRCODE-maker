@@ -133,13 +133,20 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
         AddArrayText B64CHR, "/"
     End If
 
+    '8bit * 3 AAAAAABB-BBBBCCCC-CCDDDDDD
+    '‚ğ
+    '6bit * 4 AAAAAA-BBBBBB-CCCCCC-DDDDDD
+    '‚É•ÏŠ·‚µA6bit‚ğ64í‚Ì•¶š‚É•ÏŠ·‚µ‚Äo—Í
+
     Result = ""
 
     idx = LBound(buf)
     Do While idx <= UBound(buf)
+        'AAAAAAxx Ë AAAAAA
         Pos = Int(buf(idx) / 4)
         Result = Result & B64CHR(Pos)
 
+        'xxxxxxBB Ë BB0000
         Pos = (buf(idx) Mod 4) * 16
 
         idx = idx + 1
@@ -148,9 +155,12 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
             Exit Do
         End If
 
+        'BBBBxxxx Ë BBBB
+        'BB0000 + BBBB = BBBBBB
         Pos = Pos + Int(buf(idx) / 16)
         Result = Result & B64CHR(Pos)
 
+        'xxxxCCCC Ë CCCC00
         Pos = (buf(idx) Mod 16) * 4
 
         idx = idx + 1
@@ -159,9 +169,12 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
             Exit Do
         End If
 
+        'CCxxxxxx Ë CC
+        'CCCC00 + CC = CCCCCC
         Pos = Pos + Int(buf(idx) / 64)
         Result = Result & B64CHR(Pos)
 
+        'xxDDDDDD Ë DDDDDD
         Pos = buf(idx) Mod 64
         Result = Result & B64CHR(Pos)
 

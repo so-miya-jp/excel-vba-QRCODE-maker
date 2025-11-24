@@ -13,25 +13,26 @@ Const COL_ECL% = 4
 Const COL_SHEET% = 5
 Const COL_FLAG% = 6
 
+'''[変換]ボタン押下時の処理
 Sub OutputQRCode_Click()
     Dim Row As Long
-    Dim ListRng As Range
+    Dim ListObj As ListObject
     Dim tSh As Worksheet, pSh As Worksheet
-    Dim txt$, eclTxt$, shName$, exe$
+    Dim targetTxt As String, eclTxt As String, shName As String, exeFlg As String
     Dim info As String
     Dim ecl As eErrorCorrectionLevel
 
-    Set ListRng = MainSheet.ListObjects("変換対象一覧").DataBodyRange
+    Set ListObj = MainSheet.ListObjects("変換対象一覧")
     Set pSh = MainSheet
 
-    For Row = 1 To ListRng.Rows.Count
-        txt = ListRng.Cells(Row, COL_TEXT).Value
-        eclTxt = ListRng.Cells(Row, COL_ECL).Value
-        shName = ListRng.Cells(Row, COL_SHEET).Value
-        exe = ListRng.Cells(Row, COL_FLAG).Value
+    For Row = 1 To ListObj.ListRows.Count: With ListObj.ListRows(Row)
+        targetTxt = .Range(COL_TEXT).Value
+        eclTxt = .Range(COL_ECL).Value
+        shName = .Range(COL_SHEET).Value
+        exeFlg = .Range(COL_FLAG).Value
 
-        If txt = "" Then GoTo Continue_For
-        If exe <> "" Then GoTo Continue_For
+        If targetTxt = "" Then GoTo Continue_For
+        If exeFlg <> "" Then GoTo Continue_For
             
         Set tSh = Nothing
         If shName <> "" Then
@@ -43,7 +44,7 @@ Sub OutputQRCode_Click()
         If tSh Is Nothing Then
             '対象シートがない場合、生成する。
             Set tSh = Application.ThisWorkbook.Sheets.Add(After:=pSh)
-            ListRng.Parent.Activate
+            MainSheet.Activate
             If shName <> "" Then
                 'シート名が記入済みの場合、シート名の変更を試みる
                 On Error Resume Next
@@ -53,7 +54,7 @@ Sub OutputQRCode_Click()
             If tSh.Name <> shName Then
                 'シート名列と対象シート名が異なる場合、シート名列を上書き
                 shName = tSh.Name
-                ListRng.Cells(Row, COL_SHEET).Value = shName
+                .Range(COL_SHEET).Value = shName
             End If
         End If
         Set pSh = tSh
@@ -66,19 +67,20 @@ Sub OutputQRCode_Click()
         Case "Q": ecl = ECL_Q
         Case Else
             ecl = ECL_L
-            ListRng.Cells(Row, COL_ECL).Value = "L"
+            .Range(COL_ECL).Value = "L"
         End Select
 
-        WriteQRCode tSh.Range("A1"), info, txt, ecl
-        ListRng.Cells(Row, COL_RESULT).Value = info
+        WriteQRCode tSh.Range("A1"), info, targetTxt, ecl
+        .Range(COL_RESULT).Value = info
         If info Like "ver.*" Then
-            ListRng.Cells(Row, COL_FLAG).Value = "済"
+            .Range(COL_FLAG).Value = "済"
         End If
     
 Continue_For:
-    Next Row
+    End With: Next Row
 End Sub
 
+'''[選択]ボタン押下時の処理
 Sub SelectFile_Click()
     Dim Rng As Range
     Dim Path As String
@@ -98,10 +100,11 @@ Sub SelectFile_Click()
     End With
 End Sub
 
+'''[分割]ボタン押下時の処理
 Sub SplitFile_Click()
     Dim SrcRng As Range, ListRng As Range
-    Dim Path$, charSet$, eclTxt$, prefix$
-    Dim msg$
+    Dim Path As String, charSet As String, eclTxt As String, prefix As String
+    Dim msg As String
     Dim ecl As eErrorCorrectionLevel
     Dim Result() As String
     Dim msgRet As VbMsgBoxResult
@@ -152,9 +155,11 @@ Sub SplitFile_Click()
         Exit Sub
     End If
 
+    '変換対象一覧の初期化
     Clear_Click
 
     If prefix <> "" Then
+        'Format用の書式作成。分割数の桁数分の連続した"0"を作成。
         fmt = Replace(Space(Len(CStr(UBound(Result)))), " ", "0")
     End If
 
@@ -171,6 +176,7 @@ Sub SplitFile_Click()
     Next idx
 End Sub
 
+'''[クリア]ボタン押下時の処理
 Sub Clear_Click()
     Dim ListObj As ListObject
     Dim Rng As Range

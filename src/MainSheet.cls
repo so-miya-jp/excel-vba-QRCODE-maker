@@ -44,6 +44,7 @@ Sub OutputQRCode_Click()
         If tSh Is Nothing Then
             '対象シートがない場合、生成する。
             Set tSh = Application.ThisWorkbook.Sheets.Add(After:=pSh)
+            ActiveWindow.Zoom = 70
             MainSheet.Activate
             If shName <> "" Then
                 'シート名が記入済みの場合、シート名の変更を試みる
@@ -56,6 +57,7 @@ Sub OutputQRCode_Click()
                 shName = tSh.Name
                 .Range(COL_SHEET).Value = shName
             End If
+            
         End If
         Set pSh = tSh
         tSh.Cells.Clear
@@ -72,7 +74,7 @@ Sub OutputQRCode_Click()
 
         WriteQRCode tSh.Range("A1"), info, targetTxt, ecl
         .Range(COL_RESULT).Value = info
-        If info Like "ver.*" Then
+        If LCase(info) Like "ver.*" Then
             .Range(COL_FLAG).Value = "済"
         End If
     
@@ -82,98 +84,174 @@ End Sub
 
 '''[選択]ボタン押下時の処理
 Sub SelectFile_Click()
-    Dim Rng As Range
+    Dim SrcObj As ListObject
+    Dim selRng As Range, r As Range
+    Dim idx As Long, tIdx As Long
     Dim Path As String
 
-    Set Rng = MainSheet.Cells(3, 2)
-    Path = Rng.Value
+    Set SrcObj = MainSheet.ListObjects("分割対象")
+    tIdx = 0
+    If TypeOf Selection Is Range Then
+        Set selRng = Intersect(Selection, SrcObj.DataBodyRange)
+        If Not selRng Is Nothing Then
+            '分割対象が選択されていた場合
+            '分割対象の選択範囲のうち、最後のファイルパスをデフォルトパスとし、上書き対象とする。
+            For idx = SrcObj.ListRows.Count To 1 Step -1
+                If Not Intersect(selRng, SrcObj.ListRows(idx).Range) Is Nothing Then
+                    Path = SrcObj.ListRows(idx).Range(1).Value
+                    If Path <> "" Then
+                        tIdx = idx
+                        Exit For
+                    End If
+                End If
+            Next idx
+        End If
+    End If
+
+    If Path = "" Then
+        '選択なし、または選択範囲が空文字の場合
+        If SrcObj.ListRows.Count = 1 Then
+            '分割対象が1行の場合、上書き対象とする。
+            tIdx = 1
+            Path = SrcObj.ListRows(1).Range(1).Value
+
+        Else
+            '分割対象が複数行の場合
+            '分割対象の最終行をデフォルトパスとする。
+            '設定行はその次の行とする。
+            For idx = SrcObj.ListRows.Count To 1 Step -1
+                Path = SrcObj.ListRows(idx).Range(1).Value
+                If Path <> "" Then Exit For
+                tIdx = idx
+            Next idx
+        End If
+    End If
+    
     If Path = "" Then
         Path = Application.ThisWorkbook.Path
     End If
+
+    If tIdx = 0 Then
+        MsgBox "選択したファイルを設定する余裕がありません。空行を用意するか、設定行を選択してください。"
+        Exit Sub
+    End If
+    
     With Application.FileDialog(msoFileDialogFilePicker)
         .Title = "分割対象のテキストファイルを選択してください。"
         .AllowMultiSelect = False
         .InitialFileName = Path
+
         If .Show Then
-            Rng.Value = .SelectedItems(1)
+            SrcObj.ListRows(tIdx).Range(1).Value = .SelectedItems(1)
         End If
     End With
 End Sub
 
 '''[分割]ボタン押下時の処理
 Sub SplitFile_Click()
-    Dim SrcRng As Range, ListRng As Range
-    Dim Path As String, charSet As String, eclTxt As String, prefix As String
-    Dim msg As String
+    Dim SrcObj As ListObject, ListObj As ListObject
+    Dim SrcAr As Variant
+    Dim Path$, charSet$, eclTxt$, prefix$
+    Dim msg$
     Dim ecl As eErrorCorrectionLevel
     Dim Result() As String
     Dim msgRet As VbMsgBoxResult
-    Dim idx As Long, Row As Long
+    Dim idx As Long, srcRow As Long, lstRow As Long
     Dim fmt As String
 
-    Set SrcRng = MainSheet.ListObjects("分割対象").DataBodyRange
-    Set ListRng = MainSheet.ListObjects("変換対象一覧").DataBodyRange
-
-    With SrcRng
-        Path = .Cells(1, 1).Value
-        charSet = .Cells(1, 2).Value
-        eclTxt = .Cells(1, 3).Value
-        prefix = .Cells(1, 4).Value
-    End With
+    Set SrcObj = MainSheet.ListObjects("分割対象")
+    Set ListObj = MainSheet.ListObjects("変換対象一覧")
+    SrcAr = SrcObj.DataBodyRange
 
     msg = ""
-    If Path = "" Then
+    idx = 0
+    For srcRow = LBound(SrcAr, 1) To UBound(SrcAr, 1)
+        Path = SrcAr(srcRow, 1)
+        charSet = SrcAr(srcRow, 2)
+        eclTxt = SrcAr(srcRow, 3)
+
+        If Path <> "" Then
+            If Dir(Path) = "" Then
+                msg = msg & vbLf & CStr(srcRow) & "行目の分割対象のファイルパスが存在しません。"
+            Else
+                idx = idx + 1
+            End If
+        
+            If charSet = "" Then
+                SrcObj.ListRows(srcRow).Range(2).Value = "Shift_JIS"
+            End If
+
+            Select Case eclTxt
+            Case "L", "M", "H", "Q"
+            Case "l", "m", "h", "q"
+                SrcObj.ListRows(srcRow).Range(3).Value = UCase(eclTxt)
+            Case Else
+                SrcObj.ListRows(srcRow).Range(3).Value = "L"
+            End Select
+        End If
+    Next srcRow
+
+    If idx = 0 Then
         msg = msg & vbLf & "分割対象のファイルパスを指定してください。"
-
-    ElseIf Dir(Path) = "" Then
-        msg = msg & vbLf & "分割対象のファイルパスが存在しません。"
     End If
-
-    If charSet = "" Then
-        charSet = "Shift_JIS"
-        SrcRng.Cells(1, 2).Value = charSet
-    End If
-
-    Select Case UCase(eclTxt)
-    Case "L": ecl = ECL_L
-    Case "M": ecl = ECL_M
-    Case "H": ecl = ECL_H
-    Case "Q": ecl = ECL_Q
-    Case Else
-        ecl = ECL_L
-        eclTxt = "L"
-        SrcRng.Cells(1, 3).Value = "L"
-    End Select
 
     If msg <> "" Then
-        MsgBox msg
+        MsgBox Mid(msg, 2)
         Exit Sub
     End If
 
-    If Not SplitFile(Result, Path, charSet, ecl) Then
-        MsgBox "ファイル分割に失敗しました。"
-        Exit Sub
-    End If
+    SrcAr = SrcObj.DataBodyRange
 
     '変換対象一覧の初期化
     Clear_Click
 
-    If prefix <> "" Then
-        'Format用の書式作成。分割数の桁数分の連続した"0"を作成。
-        fmt = Replace(Space(Len(CStr(UBound(Result)))), " ", "0")
-    End If
+    lstRow = 0
+    For srcRow = LBound(SrcAr, 1) To UBound(SrcAr, 1)
+        Path = SrcAr(srcRow, 1)
+        charSet = SrcAr(srcRow, 2)
+        eclTxt = SrcAr(srcRow, 3)
+        prefix = SrcAr(srcRow, 4)
 
-    Row = 1
-    For idx = LBound(Result) To UBound(Result)
-        Do While ListRng.Cells(Row, COL_TEXT) <> "": Row = Row + 1: Loop
-        ListRng.Cells(Row, COL_TEXT).Value = Result(idx)
-        ListRng.Cells(Row, COL_ECL).Value = eclTxt
-        If prefix <> "" Then
-            ListRng.Cells(Row, COL_SHEET).Value = prefix & Format(idx, fmt)
+        If Path = "" Then GoTo Continue_For
+
+        Select Case eclTxt
+        Case "L": ecl = ECL_L
+        Case "M": ecl = ECL_M
+        Case "H": ecl = ECL_H
+        Case "Q": ecl = ECL_Q
+        End Select
+
+        Erase Result
+        If Not SplitFile(Result, Path, charSet, ecl) Then
+            MsgBox "ファイル分割に失敗しました。" & vbLf & Path
+            GoTo Continue_For
         End If
-        ListRng.Cells(Row, COL_FLAG).Value = ""
-        Row = Row + 1
-    Next idx
+
+        If prefix <> "" Then
+            'Format用の書式作成。分割数の桁数分の"0"を作成。
+            fmt = Replace(Space(Len(CStr(UBound(Result)))), " ", "0")
+        End If
+
+        For idx = LBound(Result) To UBound(Result)
+            Do
+                lstRow = lstRow + 1
+                If lstRow > ListObj.ListRows.Count Then
+                    ListObj.ListRows.Add
+                    Exit Do
+                End If
+            Loop While ListObj.ListRows(lstRow).Range(COL_TEXT) <> ""
+
+            With ListObj.ListRows(lstRow)
+                .Range(COL_TEXT).Value = Result(idx)
+                .Range(COL_ECL).Value = eclTxt
+                If prefix <> "" Then
+                    .Range(COL_SHEET).Value = prefix & Format(idx, fmt)
+                End If
+                .Range(COL_FLAG).Value = ""
+            End With
+        Next idx
+Continue_For:
+    Next srcRow
 End Sub
 
 '''[クリア]ボタン押下時の処理
@@ -198,4 +276,3 @@ Sub Clear_Click()
         End Select
     End If
 End Sub
-

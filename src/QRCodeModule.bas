@@ -110,7 +110,7 @@ Public Function GetQRCode(ByRef ar() As Variant, ByRef pInfo As String, ByVal pT
         pInfo = ErrTxt
         Exit Function
     End If
-    
+
     pInfo = "Ver." & Int((UBound(ar, 2) - 17) / 4)
 
     GetQRCode = True
@@ -314,8 +314,8 @@ FIN_NUMERIC:
     '- ALNUMと数字が隣接している場合、数字が8桁未満ならばALNUMとして出力したほうがビット数が少ない
     '- byteと数字が隣接している場合、数字が4桁未満ならばbyteとして出力したほうがビット数が少ない
     '- 数字と漢字はグループが異なる
-    If ecx(TYP_NUM).Cnt < 8 Then
-        '数字が8桁未満
+    If ecx(TYP_NUM).Cnt < 9 Then
+        '数字が9桁未満
         If nxTyp = TYP_ALNUM Then
             '次の文字が数字以外のALNUMなのでALNUMとして出力予定
             ecx(TYP_NUM).Cnt = 0
@@ -327,15 +327,15 @@ FIN_NUMERIC:
 
         ElseIf ecxcmp(ecx, TYP_ALNUM, TYP_NUM) > 0 Then
             '数字の前に数字以外の未出力のALNUMが存在する
-            If ecx(TYP_ALNUM).Cnt < 7 Then
-                '未出力のALNUMが7桁未満なのでbyteとして出力予定
+            If ecx(TYP_ALNUM).Cnt < 8 Then
+                '未出力のALNUMが8桁未満なのでbyteとして出力予定
                 ecx(TYP_NUM).Cnt = 0
                 ecx(TYP_ALNUM).Cnt = 0
                 Return
             End If
 
-        ElseIf ecx(TYP_NUM).Cnt < 4 Then
-            '数字の前後がALNUM以外のbyteで、数字が4桁未満の場合、byteとして出力予定
+        ElseIf ecx(TYP_NUM).Cnt < 5 Then
+            '数字の前後がALNUM以外のbyteで、数字が5桁未満の場合、byteとして出力予定
             ecx(TYP_NUM).Cnt = 0
             ecx(TYP_ALNUM).Cnt = 0
             Return
@@ -351,8 +351,8 @@ FIN_NUMERIC:
         'ALNUMと数字の未出力桁数が同じ場合は数字として出力
         QR_addEb eb, ecx, TYP_NUM
 
-    ElseIf ecx(TYP_NUM).Cnt < 8 Then
-        '数字の前に未出力のALNUMが存在し、数字が8桁未満の場合
+    ElseIf ecx(TYP_NUM).Cnt < 9 Then
+        '数字の前に未出力のALNUMが存在し、数字が9桁未満の場合
         QR_addEb eb, ecx, TYP_ALNUM
 
     Else
@@ -368,13 +368,13 @@ FIN_NUMERIC:
     Return
 
 FIN_ALPH_NUMERIC:
-    '- byteとALNUMが隣接している場合、ALNUMが7桁未満ならばbyteとして出力したほうがビット数が少ない
+    '- byteとALNUMが隣接している場合、ALNUMが8桁未満ならばbyteとして出力したほうがビット数が少ない
     '- ALNUMと漢字はグループが異なる
     If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And nxTyp = TYP_UNKNOWN Then
         'ALNUMの前後に未出力のbyteが存在しない場合
 
-    ElseIf ecx(TYP_ALNUM).Cnt < 7 Then
-        'ALNUMが7文字未満なのでbyteとして出力予定
+    ElseIf ecx(TYP_ALNUM).Cnt < 8 Then
+        'ALNUMが8文字未満なのでbyteとして出力予定
         ecx(TYP_ALNUM).Cnt = 0
         Return
     End If
@@ -481,7 +481,7 @@ Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp 
             For idx = ecx(tTyp).Pos To ecx(sTyp).Pos - 1
                 .Cnt = .Cnt + bytSiz(idx)
             Next idx
-        
+
         Else
             .Cnt = ecx(tTyp).Cnt - ecx(sTyp).Cnt
         End If
@@ -1624,3 +1624,4 @@ Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As B
 
     BC_to2Dim = True
 End Function
+

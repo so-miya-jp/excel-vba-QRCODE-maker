@@ -7,24 +7,32 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
-Const COL_TEXT% = 2
-Const COL_RESULT% = 3
-Const COL_ECL% = 4
-Const COL_SHEET% = 5
-Const COL_FLAG% = 6
+Option Explicit
+
+Enum LIST_COL
+    COL_NO = 1
+    COL_TEXT = 2
+    COL_RESULT = 3
+    COL_ECL = 4
+    COL_SHEET = 5
+    COL_FLAG = 6
+End Enum
+Const NUMBER_FORMULA As String = "=IF([@QRコード変換対象文字列]="""", """", ROW() - ROW(変換対象一覧[#Headers]))"
 
 '''[変換]ボタン押下時の処理
 Sub OutputQRCode_Click()
-    Dim Row As Long
+    Dim Row As Long, outRow As Long
     Dim ListObj As ListObject
     Dim tSh As Worksheet, pSh As Worksheet
     Dim targetTxt As String, eclTxt As String, shName As String, exeFlg As String
+    Dim shNameChunk As String
     Dim info As String
     Dim ecl As eErrorCorrectionLevel
 
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
     Set pSh = MainSheet
 
+    shNameChunk = "#"
     For Row = 1 To ListObj.ListRows.Count: With ListObj.ListRows(Row)
         targetTxt = .Range(COL_TEXT).Value
         eclTxt = .Range(COL_ECL).Value
@@ -33,19 +41,23 @@ Sub OutputQRCode_Click()
 
         If targetTxt = "" Then GoTo Continue_For
         If exeFlg <> "" Then GoTo Continue_For
-            
+
         Set tSh = Nothing
+
         If shName <> "" Then
             'シート名が記入済みの場合、その名前のシートを対象シートとして取得
             On Error Resume Next
             Set tSh = Application.ThisWorkbook.Sheets(shName)
             On Error GoTo 0
         End If
+
         If tSh Is Nothing Then
             '対象シートがない場合、生成する。
             Set tSh = Application.ThisWorkbook.Sheets.Add(After:=pSh)
+            Set pSh = tSh
             ActiveWindow.Zoom = 70
             MainSheet.Activate
+
             If shName <> "" Then
                 'シート名が記入済みの場合、シート名の変更を試みる
                 On Error Resume Next
@@ -57,11 +69,17 @@ Sub OutputQRCode_Click()
                 shName = tSh.Name
                 .Range(COL_SHEET).Value = shName
             End If
-            
         End If
-        Set pSh = tSh
-        tSh.Cells.Clear
-            
+
+        If InStr(shNameChunk, "#" & tSh.Name & "#") > 0 Then
+            outRow = GetLastUsedRow(tSh) + 2
+
+        Else
+            shNameChunk = shNameChunk & tSh.Name & "#"
+            tSh.Cells.Clear
+            outRow = 1
+        End If
+
         Select Case UCase(eclTxt)
         Case "L": ecl = ECL_L
         Case "M": ecl = ECL_M
@@ -72,12 +90,12 @@ Sub OutputQRCode_Click()
             .Range(COL_ECL).Value = "L"
         End Select
 
-        WriteQRCode tSh.Range("A1"), info, targetTxt, ecl
+        WriteQRCode tSh.Cells(outRow, 1), info, targetTxt, ecl
         .Range(COL_RESULT).Value = info
         If LCase(info) Like "ver.*" Then
             .Range(COL_FLAG).Value = "済"
         End If
-    
+
 Continue_For:
     End With: Next Row
 End Sub
@@ -118,15 +136,18 @@ Sub SelectFile_Click()
         Else
             '分割対象が複数行の場合
             '分割対象の最終行をデフォルトパスとする。
-            '設定行はその次の行とする。
-            For idx = SrcObj.ListRows.Count To 1 Step -1
-                Path = SrcObj.ListRows(idx).Range(1).Value
-                If Path <> "" Then Exit For
-                tIdx = idx
+            '設定行は最初の空行とする。
+            For idx = 1 To SrcObj.ListRows.Count
+                If SrcObj.ListRows(idx).Range(1).Value = "" Then
+                    If tIdx = 0 Then tIdx = idx
+
+                Else
+                    Path = SrcObj.ListRows(idx).Range(1).Value
+                End If
             Next idx
         End If
     End If
-    
+
     If Path = "" Then
         Path = Application.ThisWorkbook.Path
     End If
@@ -135,7 +156,7 @@ Sub SelectFile_Click()
         MsgBox "選択したファイルを設定する余裕がありません。空行を用意するか、設定行を選択してください。"
         Exit Sub
     End If
-    
+
     With Application.FileDialog(msoFileDialogFilePicker)
         .Title = "分割対象のテキストファイルを選択してください。"
         .AllowMultiSelect = False
@@ -151,8 +172,8 @@ End Sub
 Sub SplitFile_Click()
     Dim SrcObj As ListObject, ListObj As ListObject
     Dim SrcAr As Variant
-    Dim Path$, charSet$, eclTxt$, prefix$
-    Dim msg$
+    Dim Path As String, charSet As String, eclTxt As String, prefix As String
+    Dim msg As String
     Dim ecl As eErrorCorrectionLevel
     Dim Result() As String
     Dim msgRet As VbMsgBoxResult
@@ -163,6 +184,7 @@ Sub SplitFile_Click()
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
     SrcAr = SrcObj.DataBodyRange
 
+    '入力チェック及び未設定項目への初期値設定
     msg = ""
     idx = 0
     For srcRow = LBound(SrcAr, 1) To UBound(SrcAr, 1)
@@ -172,19 +194,22 @@ Sub SplitFile_Click()
 
         If Path <> "" Then
             If Dir(Path) = "" Then
-                msg = msg & vbLf & CStr(srcRow) & "行目の分割対象のファイルパスが存在しません。"
+                msg = msg & vbLf & CStr(srcRow) & "行目の分割対象のファイルが存在しません。"
+
             Else
                 idx = idx + 1
             End If
-        
+
             If charSet = "" Then
                 SrcObj.ListRows(srcRow).Range(2).Value = "Shift_JIS"
             End If
 
             Select Case eclTxt
             Case "L", "M", "H", "Q"
+
             Case "l", "m", "h", "q"
                 SrcObj.ListRows(srcRow).Range(3).Value = UCase(eclTxt)
+
             Case Else
                 SrcObj.ListRows(srcRow).Range(3).Value = "L"
             End Select
@@ -237,6 +262,12 @@ Sub SplitFile_Click()
                 lstRow = lstRow + 1
                 If lstRow > ListObj.ListRows.Count Then
                     ListObj.ListRows.Add
+                    With ListObj.ListRows(lstRow)
+                        .Range.RowHeight = 30#
+                        If .Range(COL_NO).Formula = "" Then
+                            .Range(COL_NO).Formula = NUMBER_FORMULA
+                        End If
+                    End With
                     Exit Do
                 End If
             Loop While ListObj.ListRows(lstRow).Range(COL_TEXT) <> ""
@@ -257,22 +288,41 @@ End Sub
 '''[クリア]ボタン押下時の処理
 Sub Clear_Click()
     Dim ListObj As ListObject
-    Dim Rng As Range
+    Dim TargetRng As Range, Rng As Range
+    Dim sh As Worksheet
 
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
 
     With ListObj
-        Set Rng = Union( _
+        Set TargetRng = Union( _
             .ListColumns(COL_TEXT).DataBodyRange, _
             .ListColumns(COL_RESULT).DataBodyRange, _
             .ListColumns(COL_ECL).DataBodyRange, _
             .ListColumns(COL_SHEET).DataBodyRange, _
             .ListColumns(COL_FLAG).DataBodyRange)
     End With
-    If Not IsBlankRange(Rng) Then
-        Select Case MsgBox("変換対象一覧を初期化しますか？", vbYesNo)
+    If Not IsBlankRange(TargetRng) Then
+        Select Case MsgBox("変換対象一覧を初期化します。シート名に対応するシートも削除しますか？", vbYesNoCancel)
         Case vbYes
-            Rng.ClearContents
+            '対応するシートが存在すれば削除する。
+            Application.DisplayAlerts = False
+            For Each Rng In ListObj.ListColumns(COL_SHEET).DataBodyRange
+                On Error Resume Next
+                Set sh = Nothing
+                Set sh = Application.ThisWorkbook.Sheets(Rng.Value)
+                On Error GoTo 0
+                If Not sh Is Nothing Then sh.Delete
+            Next Rng
+            Application.DisplayAlerts = True
+
+        Case vbNo
+            'nop
+
+        Case Else
+            Exit Sub
         End Select
+
+        TargetRng.ClearContents
     End If
 End Sub
+

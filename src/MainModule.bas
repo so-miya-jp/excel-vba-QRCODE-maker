@@ -80,18 +80,18 @@ Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Option
             Exit Function
         End If
 
+        curText = Trim(ConvertBase64(buf))
         curText = "begin-base64 664 " & Mid(Path, InStrRev(Path, "\") + 1) & vbLf _
-                & ConvertBase64(buf) & vbLf _
-                & "====" & vbLf
+                & curText & vbLf & "===="
 
     ElseIf Not ReadTextFile(curText, Path, charSet) Then
         Exit Function
     End If
-    
+
     Lines = Split(curText, vbLf)
     curText = ""
     oldText = ""
-    
+
     For idx = LBound(Lines) To UBound(Lines)
         curText = curText & Lines(idx) & vbLf
         v = CheckQRCode(curText, pECL)
@@ -102,7 +102,7 @@ Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Option
             curText = ""
             idx = idx - 1
         End If
-        
+
         oldText = curText
     Next idx
     AddArrayText Result, oldText

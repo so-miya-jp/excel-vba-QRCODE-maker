@@ -82,7 +82,7 @@ Public Function ReadTextFile(ByRef Result As String, ByVal Path As String, Optio
 
     ReadTextFile = True
     Exit Function
-    
+
 ErrProc:
 End Function
 
@@ -109,7 +109,7 @@ Public Function ReadBinaryFile(ByRef Result() As Byte, ByVal Path As String) As 
 
     ReadBinaryFile = True
     Exit Function
-    
+
 ErrProc:
 End Function
 
@@ -141,7 +141,7 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
     Result = ""
 
     idx = LBound(buf)
-    Do While idx <= UBound(buf)
+    Do Until idx > UBound(buf)
         'AAAAAAxx ÅÀ AAAAAA
         Pos = Int(buf(idx) / 4)
         Result = Result & B64CHR(Pos)
@@ -180,7 +180,8 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
 
         idx = idx + 1
 
-        If folding And idx Mod 57 = 0 Then '19 * 4 = 76, 19 * 3 = 57
+        If folding And idx Mod 57 = 0 Then
+            '19 * 4 = 76, 19 * 3 = 57
             Result = Result & vbLf
         End If
     Loop

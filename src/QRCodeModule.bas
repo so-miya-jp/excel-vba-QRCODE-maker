@@ -5,7 +5,7 @@ Rem オリジナルとは以下の点が異なります。
 Rem ・漢字モードに対応しました。
 Rem ・UTF-8の3byte以上の文字が指定されたとき、正常に動作するようにしました。
 Rem ・オリジナルは出力先がShapeでしたが、2次元配列出力としてあります。
-Rem ・サイズ計算時にend of chainとround to byteのサイズを考慮に入れるようにしました。
+Rem ・サイズ計算時にend of chainのサイズを考慮に入れるようにしました。
 Rem ・解析のため、大きなサブルーチンを分解しました。
 Rem ・解析のため、ユーザー定義を使用するようにしました。
 Rem ・文字列解析を作り直しました。
@@ -608,10 +608,10 @@ Private Sub QR_search_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As 
 
     Ver = 0
 
-    'size of (end of chain, round to byte) is max 11bits
-    reqSiz(0) = 11
-    reqSiz(1) = 11
-    reqSiz(2) = 11
+    'size of (end of chain) is max 4bits
+    reqSiz(0) = 4
+    reqSiz(1) = 4
+    reqSiz(2) = 4
     For idx = LBound(eb) To UBound(eb): With eb(idx)
         reqSiz(0) = reqSiz(0) + QR_getBitSize(.Typ, .Cnt, 1)
         reqSiz(1) = reqSiz(1) + QR_getBitSize(.Typ, .Cnt, 10)
@@ -823,6 +823,8 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
 
     'end of chain
     BB_putBits encArr, encIdx, 0, 4
+
+    'round to byte
     If (encIdx Mod 8) <> 0 Then
         BB_putBits encArr, encIdx, 0, 8 - (encIdx Mod 8)
     End If

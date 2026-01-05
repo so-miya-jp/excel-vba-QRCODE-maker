@@ -5,6 +5,7 @@ Rem オリジナルとは以下の点が異なります。
 Rem ・漢字モードに対応しました。
 Rem ・UTF-8の3byte以上の文字が指定されたとき、正常に動作するようにしました。
 Rem ・オリジナルは出力先がShapeでしたが、2次元配列出力としてあります。
+Rem ・サイズ計算時にend of chainとround to byteのサイズを考慮に入れるようにしました。
 Rem ・解析のため、大きなサブルーチンを分解しました。
 Rem ・解析のため、ユーザー定義を使用するようにしました。
 Rem ・文字列解析を作り直しました。
@@ -217,7 +218,9 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
               & "  d:" & (qrParam.ttlByt - qrParam.ccSiz * qrParam.ccBlks)
 #End If
 
-    QR_encd pText, qrParam, eb, encoded1
+    If Not QR_encd(pText, qrParam, eb, encoded1) Then
+        Exit Function
+    End If
 
     QR_makeArr qrParam, encoded1, qrArr
 
@@ -605,9 +608,10 @@ Private Sub QR_search_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As 
 
     Ver = 0
 
-    reqSiz(0) = 0
-    reqSiz(1) = 0
-    reqSiz(2) = 0
+    'size of (end of chain, round to byte) is max 11bits
+    reqSiz(0) = 11
+    reqSiz(1) = 11
+    reqSiz(2) = 11
     For idx = LBound(eb) To UBound(eb): With eb(idx)
         reqSiz(0) = reqSiz(0) + QR_getBitSize(.Typ, .Cnt, 1)
         reqSiz(1) = reqSiz(1) + QR_getBitSize(.Typ, .Cnt, 10)
@@ -703,7 +707,8 @@ End Function
 ''' @param qrParam / I / QRパラメタ
 ''' @param eb      / I / エンコードブロック情報
 ''' @param encArr  / O / 出力バイト配列
-Private Sub QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() As tEbItem, ByRef encArr() As Byte)
+''' @return 成功した場合、Trueを、失敗した場合はFalseを返却する
+Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() As tEbItem, ByRef encArr() As Byte) As Boolean
     Dim encIdx As Integer
     Dim r As Integer
     Dim c As Integer
@@ -714,6 +719,7 @@ Private Sub QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() 
 
     ReDim encArr(qrParam.ttlByt + 2)
 
+    QR_encd = False
     encIdx = 0
     For eIdx = LBound(eb) To UBound(eb): With eb(eIdx)
         Select Case .Typ
@@ -826,7 +832,7 @@ Private Sub QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() 
     If encIdx > idx Then
         outErr "QR_encd : encode length error"
 
-        Exit Sub
+        Exit Function
     End If
 
     'padding 0xEC, 0x11, 0xEC, 0x11
@@ -837,7 +843,9 @@ Private Sub QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() 
     'supplement ECC
     idx = qrParam.ccSiz * qrParam.ccBlks
     QR_rs &H11D, encArr, qrParam.ttlByt - idx, idx, qrParam.ccBlks
-End Sub
+
+    QR_encd = True
+End Function
 
 '''read solomon
 ''' @param pPoly   / I / GF(256)

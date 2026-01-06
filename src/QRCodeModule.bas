@@ -200,8 +200,10 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
         Exit Function
     End If
 
+    '変換対象文字列pTextを解析し、エンコードブロックebを生成
     QR_anlyz pText, eb
 
+    'エラー補正レベルpECLとエンコードブロックebからQRコード情報qrParamを決定
     QR_params pECL, eb, qrParam
 
 #If DEBUG_ = 1 Then
@@ -218,14 +220,29 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
               & "  d:" & (qrParam.ttlByt - qrParam.ccSiz * qrParam.ccBlks)
 #End If
 
+    '変換対象文字列pTextとエンコードブロックebからエンコードバイナリencoded1を生成
     If Not QR_encd(pText, qrParam, eb, encoded1) Then
         Exit Function
     End If
 
-    QR_makeArr qrParam, encoded1, qrArr
+    'リードソロモン符号
+    'supplement ECC
+    With qrParam
+        QR_rs &H11D, encoded1, .ttlByt - .ccSiz * .ccBlks, .ccSiz * .ccBlks, .ccBlks
+    End With
 
+    'QRコード情報qrParamからQR配列qrArrに初期値設定
+    QR_initArr qrParam, qrArr
+
+    'QR配列qrArrにエンコードバイナリencoded1を埋め込む
+    With qrParam
+        QR_fill qrArr, .Siz, encoded1, .ccBlks, .ttlByt - .ccSiz * .ccBlks, .ttlByt
+    End With
+
+    'マスクをかける
     QR_maskArr qrParam, pECL, qrArr
 
+    '二次元バーコードに変換
     QR_gen = QR_makeAscMtrx(qrParam, qrArr)
 End Function
 
@@ -608,7 +625,7 @@ Private Sub QR_search_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As 
 
     Ver = 0
 
-    'size of (end of chain) is max 4bits
+    'size of (end of chain) is 4bits
     reqSiz(0) = 4
     reqSiz(1) = 4
     reqSiz(2) = 4
@@ -842,10 +859,6 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
         BB_putBits encArr, encIdx, &HEC11, 16
     Loop
 
-    'supplement ECC
-    idx = qrParam.ccSiz * qrParam.ccBlks
-    QR_rs &H11D, encArr, qrParam.ttlByt - idx, idx, qrParam.ccBlks
-
     QR_encd = True
 End Function
 
@@ -950,11 +963,10 @@ Private Function QR_rs_prod(ByRef poly() As Byte, ByVal pA As Integer, ByVal pB 
     End If
 End Function
 
-'''エンコードバイト情報からQR配列を生成する
+'''QR配列の初期設定
 ''' @param qrParam / I / QRパラメタ
-''' @param encArr  / I / エンコードバイト情報
 ''' @param qrArr   / O / QR配列
-Private Sub QR_makeArr(ByRef qrParam As tParams, ByRef encArr() As Byte, ByRef qrArr() As Byte)
+Private Sub QR_initArr(ByRef qrParam As tParams, ByRef qrArr() As Byte)
     Dim ch As Integer
     Dim Siz As Integer
     Dim r As Integer, c As Integer
@@ -1031,10 +1043,6 @@ Private Sub QR_makeArr(ByRef qrParam As tParams, ByRef encArr() As Byte, ByRef q
             Next c
         End If
     End With
-
-    With qrParam
-        QR_fill qrArr, Siz, encArr, .ccBlks, .ttlByt - .ccSiz * .ccBlks, .ttlByt
-    End With
 End Sub
 
 '''マスク処理
@@ -1091,6 +1099,13 @@ DoMask:
     Return
 End Sub
 
+'''エンコードバイト情報をQR配列に埋め込む
+''' @param qrArr   / IO / QR配列
+''' @param pSiz    / I / サイズ
+''' @param encArr  / I / エンコードバイト情報
+''' @param pBlkSiz / I / ブロックサイズ
+''' @param pDatLen / I / データ長
+''' @param pTtlLen / I / 全体サイズ
 Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr() As Byte, ByVal pBlkSiz As Integer, ByVal pDatLen As Integer, ByVal pTtlLen As Integer)
     Dim vds As Integer, ves As Integer, vDnLen As Integer, vsb As Integer
     Dim vx As Integer, vy As Integer

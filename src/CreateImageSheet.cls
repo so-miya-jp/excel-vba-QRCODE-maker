@@ -95,6 +95,7 @@ Sub SelectCell_Click()
     If Not Rng Is Nothing Then
         If Not Rng.Worksheet Is sh Then
             initText = Rng.Worksheet.Name & "!" & Rng.Address
+
         Else
             initText = Rng.Address
         End If

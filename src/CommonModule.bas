@@ -116,11 +116,12 @@ End Function
 '''一時的なファイルパスの生成
 ''' @param ext / I / 拡張子(省略可能)
 ''' @return 一時的なファイルパス
-Public Function CreateTemporaryFilePath(Optional ext As String) As String
+Public Function CreateTemporaryFilePath(Optional ext As String = "") As String
     Const TemporaryFolder As Integer = 2
     With CreateObject("Scripting.FileSystemObject")
-        CreateTemporaryFilePath = .GetSpecialFolder(TemporaryFolder) & "\" & .GetTempName()
-        If Not IsMissing(ext) Then CreateTemporaryFilePath = CreateTemporaryFilePath & "." & ext
+        CreateTemporaryFilePath = .GetSpecialFolder(TemporaryFolder) _
+            & "\" & .GetTempName() _
+            & IIf(ext = "", "", "." & ext)
     End With
 End Function
 
@@ -134,7 +135,7 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
     Static B64CHR() As String
     Dim Result As String
     Dim idx As Long
-    Dim pos As Integer
+    Dim Pos As Integer
 
     If (Not B64CHR) = -1 Then
         For idx = Asc("A") To Asc("Z"): AddArrayText B64CHR, Chr(idx): Next idx
@@ -154,40 +155,40 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
     idx = LBound(buf)
     Do Until idx > UBound(buf)
         'AAAAAAxx ⇒ AAAAAA
-        pos = Int(buf(idx) / 4)
-        Result = Result & B64CHR(pos)
+        Pos = Int(buf(idx) / 4)
+        Result = Result & B64CHR(Pos)
 
         'xxxxxxBB ⇒ BB0000
-        pos = (buf(idx) Mod 4) * 16
+        Pos = (buf(idx) Mod 4) * 16
 
         idx = idx + 1
         If idx > UBound(buf) Then
-            Result = Result & B64CHR(pos) & "=="
+            Result = Result & B64CHR(Pos) & "=="
             Exit Do
         End If
 
         'BBBBxxxx ⇒ BBBB
         'BB0000 + BBBB = BBBBBB
-        pos = pos + Int(buf(idx) / 16)
-        Result = Result & B64CHR(pos)
+        Pos = Pos + Int(buf(idx) / 16)
+        Result = Result & B64CHR(Pos)
 
         'xxxxCCCC ⇒ CCCC00
-        pos = (buf(idx) Mod 16) * 4
+        Pos = (buf(idx) Mod 16) * 4
 
         idx = idx + 1
         If idx > UBound(buf) Then
-            Result = Result & B64CHR(pos) & "="
+            Result = Result & B64CHR(Pos) & "="
             Exit Do
         End If
 
         'CCxxxxxx ⇒ CC
         'CCCC00 + CC = CCCCCC
-        pos = pos + Int(buf(idx) / 64)
-        Result = Result & B64CHR(pos)
+        Pos = Pos + Int(buf(idx) / 64)
+        Result = Result & B64CHR(Pos)
 
         'xxDDDDDD ⇒ DDDDDD
-        pos = buf(idx) Mod 64
-        Result = Result & B64CHR(pos)
+        Pos = buf(idx) Mod 64
+        Result = Result & B64CHR(Pos)
 
         idx = idx + 1
 

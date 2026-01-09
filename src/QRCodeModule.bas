@@ -55,14 +55,14 @@ End Enum
 
 'モード毎の解析一時保持要素
 Private Type tEcxItem
-    Pos As Integer
+    pos As Integer
     Cnt As Integer
 End Type
 
 'エンコードブロック要素(解析結果保持用)
 Private Type tEbItem
     Typ As eType
-    Pos As Integer
+    pos As Integer
     Cnt As Integer
 End Type
 
@@ -88,7 +88,7 @@ Private Sub Init()
     COUNT_LENGTH = [{10, 12, 14; 9, 11, 13; 8, 16, 16; 8, 10, 12}]
 End Sub
 
-'''変換対象文字列をQRコードに変換し、二次元配列に格納します。
+'''変換対象文字列をQRコードに変換し、二次元配列に格納する。
 ''' @param ar      / O / QRコードを格納する二次元配列
 ''' @param pInfo   / O / 補足情報。変換成功時はバージョン文字列、変換失敗時はエラーメッセージを格納する。
 ''' @param pTarget / I / 変換対象文字列
@@ -118,8 +118,8 @@ Public Function GetQRCode(ByRef ar() As Variant, ByRef pInfo As String, ByVal pT
 
 End Function
 
-'''指定した変換対象文字列がQRコードに変換可能である場合、1～40のバージョン番号を返却します。
-'''変換不可である場合、0を返却します。
+'''指定した変換対象文字列がQRコードに変換可能である場合、1～40のバージョン番号を返却する。
+'''変換不可である場合、0を返却する。
 ''' @param pText / I / 変換対象文字列
 ''' @param pECL  / I / エラー補正レベル
 ''' @return バージョン番号、もしくは0
@@ -137,7 +137,7 @@ Public Function CheckQRCode(ByVal pText As String, ByVal pECL As eErrorCorrectio
     CheckQRCode = Ver
 End Function
 
-'''指定された文字のUTF-8のバイトコードをLong型で返却する
+'''指定された文字のUTF-8のバイトコードをLong型で返却する。
 ''' @param ch / I / 文字
 ''' @return IsMSがTrueの場合、UTF-8コード。IsMSがFalseのとき、ASCIIコード
 Private Function AscL(ByVal ch As String) As Long
@@ -150,7 +150,7 @@ Private Function AscL(ByVal ch As String) As Long
 End Function
 
 '''指定された文字がSJISとして表現可能である場合、QRコード用の13bitのバイトコードに変換して返却する。
-'''SJISとして表現できない場合、-1を返却する
+'''SJISとして表現できない場合、-1を返却する。
 ''' @param ch / I / 文字
 ''' @return QRコードの漢字モードの13ビット情報、または-1
 Private Function QR_AscK(ByVal ch As String) As Long
@@ -261,7 +261,7 @@ Private Sub QR_anlyz(ByVal pText As String, ByRef eb() As tEbItem)
     Dim bytSiz() As Integer
 
     For idx = LBound(ecx) To UBound(ecx): With ecx(idx)
-        .Cnt = 0: .Pos = 0
+        .Cnt = 0: .pos = 0
     End With: Next idx
 
     ReDim bytSiz(1 To Len(pText))
@@ -441,10 +441,10 @@ End Sub
 ''' @return 元タイプが先タイプよりも先行している場合、正の数を返却する。
 Private Function ecxcmp(ByRef ecx() As tEcxItem, ByVal sTyp As eType, ByVal dTyp As eType) As Integer
     If sTyp = TYP_BYTE And dTyp = TYP_KANJI Then
-        ecxcmp = ecx(dTyp).Pos - ecx(sTyp).Pos
+        ecxcmp = ecx(dTyp).pos - ecx(sTyp).pos
 
     ElseIf sTyp = TYP_KANJI And dTyp = TYP_BYTE Then
-        ecxcmp = ecx(dTyp).Pos - ecx(sTyp).Pos
+        ecxcmp = ecx(dTyp).pos - ecx(sTyp).pos
 
     Else
         ecxcmp = ecx(sTyp).Cnt - ecx(dTyp).Cnt
@@ -463,7 +463,7 @@ Private Sub QR_anlyz_cntLtr(ByRef ecx() As tEcxItem, ByVal tTyp As eType, ByVal 
         Exit Sub
     End If
 
-    If ecx(tTyp).Cnt = 0 Then ecx(tTyp).Pos = idx
+    If ecx(tTyp).Cnt = 0 Then ecx(tTyp).pos = idx
     ecx(tTyp).Cnt = ecx(tTyp).Cnt + ltSiz
 End Sub
 
@@ -490,7 +490,7 @@ Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp 
     ReDim Preserve eb(1 To idx)
     With eb(idx)
         .Typ = tTyp
-        .Pos = ecx(tTyp).Pos
+        .pos = ecx(tTyp).pos
         If sTyp = TYP_UNKNOWN Then
             .Cnt = ecx(tTyp).Cnt
 
@@ -498,7 +498,7 @@ Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp 
             '漢字モード文字列にバイトモード文字列が先行している場合にバイトを出力するときの処理。
             'SJIS 1文字はUTF-8で3～4byteなので漢字モード文字列手前までのbyte数を再計算する。
             .Cnt = 0
-            For idx = ecx(tTyp).Pos To ecx(sTyp).Pos - 1
+            For idx = ecx(tTyp).pos To ecx(sTyp).pos - 1
                 .Cnt = .Cnt + bytSiz(idx)
             Next idx
 
@@ -526,7 +526,7 @@ Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrPar
         Case TYP_BYTE:      txt = "B"
             ln = 0: b = 0
             Do While b < .Cnt
-                utfCd = AscL(Mid(pText, .Pos + ln, 1))
+                utfCd = AscL(Mid(pText, .pos + ln, 1))
                 b = b + 1 - (utfCd >= &H80) - (utfCd >= &H7FF) - (utfCd >= &H1FFFFF)
                 ln = ln + 1
             Loop
@@ -538,7 +538,7 @@ Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrPar
         txt = "eb(" & idx & ")=" & txt
         txt = txt & "(" & ln & " letters"
         txt = txt & " / " & b & "bits)"
-        txt = txt & ", [" & Mid(pText, .Pos, ln) & "]"
+        txt = txt & ", [" & Mid(pText, .pos, ln) & "]"
 
         Debug.Print txt
     End With: Next idx
@@ -752,7 +752,7 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
         BB_putBits encArr, encIdx, k, c + 4
 
         bIdx = 0
-        m = .Pos
+        m = .pos
         r = 0
         Do While bIdx < .Cnt
             k = AscL(Mid(pText, m, 1))
@@ -1562,7 +1562,7 @@ Private Sub BB_putBits(ByRef pArr() As Byte, ByRef pPos As Integer, ByRef pVal A
     Loop
 End Sub
 
-'''QR配列を元にa～pとvbLfで構成されたQRコード表現文字列に変換します。
+'''QR配列を元にa～pとvbLfで構成されたQRコード表現文字列に変換する。
 ''' @param qrParam / I / QRパラメタ
 ''' @param qrArr   / I / QR配列
 ''' @return QRコード表現文字列
@@ -1596,14 +1596,14 @@ Private Function QR_makeAscMtrx(ByRef qrParam As tParams, ByRef qrArr() As Byte)
     QR_makeAscMtrx = ascMtrx
 End Function
 
-'''QRコード表現文字列を二次元配列に変換します。
-''' @param pBarCode / I /
-''' @param ar       / O /
+'''バーコード表現文字列を二次元配列に変換する。
+''' @param pBarCode / I / バーコード表現文字列
+''' @param ar       / O / 二次元配列
 ''' @return 成功した場合はTrueを返却する。
 Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As Boolean
     Dim rIdx As Integer, cIdx As Integer, t As Integer
     Dim txt As String, lenTxt As Integer
-    Dim Pos As Integer
+    Dim pos As Integer
     Dim ch As String
 
     BC_to2Dim = False
@@ -1612,17 +1612,17 @@ Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As B
     t = 0
     txt = Trim(pBarCode)
     lenTxt = Len(txt)
-    For Pos = 1 To lenTxt
-        ch = Mid(txt, Pos, 1)
+    For pos = 1 To lenTxt
+        ch = Mid(txt, pos, 1)
         If ch >= "a" And ch <= "p" Then
             t = t + 2
 
-        ElseIf ch = vbLf Or Pos = lenTxt Then
+        ElseIf ch = vbLf Or pos = lenTxt Then
             If cIdx < t Then cIdx = t
             t = 0
             rIdx = rIdx + 2
         End If
-    Next Pos
+    Next pos
     If cIdx <= 0 Then
         outErr "BC_to2Dim : no data"
         Exit Function
@@ -1631,8 +1631,8 @@ Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As B
     ReDim ar(1 To rIdx, 1 To cIdx)
     rIdx = 0
     cIdx = 0
-    For Pos = 1 To lenTxt
-        ch = Mid(txt, Pos, 1)
+    For pos = 1 To lenTxt
+        ch = Mid(txt, pos, 1)
         If ch = vbLf Then
             cIdx = 0
             rIdx = rIdx + 2
@@ -1645,7 +1645,7 @@ Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As B
             If (t And 8) = 8 Then ar(rIdx + 2, cIdx + 2) = 1
             cIdx = cIdx + 2
         End If
-    Next Pos
+    Next pos
 
     BC_to2Dim = True
 End Function

@@ -2,7 +2,7 @@ Attribute VB_Name = "CommonModule"
 Option Explicit
 Option Private Module
 
-'''文字列を配列に格納する
+'''文字列を配列に格納する。
 '''引数
 '''  Texts     / IO / 格納する配列。
 '''  Text      / I  / 格納される文字列。
@@ -53,7 +53,7 @@ Public Function IsBlankRange(ByRef Rng As Range) As Boolean
     IsBlankRange = (WorksheetFunction.CountBlank(Rng) = Rng.Count)
 End Function
 
-'''指定された文字コードでテキストファイルの一括読込を行う
+'''指定された文字コードでテキストファイルの一括読込を行う。
 '''引数
 '''  Result / O / 読み込んだテキストデータ
 '''  Path   / I / 読み込み対象のファイルパス
@@ -86,7 +86,7 @@ Public Function ReadTextFile(ByRef Result As String, ByVal Path As String, Optio
 ErrProc:
 End Function
 
-'''バイナリファイルの一括読込を行う
+'''バイナリファイルの一括読込を行う。
 '''引数
 '''  Result / O / 読み込んだバイナリデータ
 '''  Path   / I / 読み込み対象のファイルパス
@@ -113,6 +113,17 @@ Public Function ReadBinaryFile(ByRef Result() As Byte, ByVal Path As String) As 
 ErrProc:
 End Function
 
+'''一時的なファイルパスの生成
+''' @param ext / I / 拡張子(省略可能)
+''' @return 一時的なファイルパス
+Public Function CreateTemporaryFilePath(Optional ext As String) As String
+    Const TemporaryFolder As Integer = 2
+    With CreateObject("Scripting.FileSystemObject")
+        CreateTemporaryFilePath = .GetSpecialFolder(TemporaryFolder) & "\" & .GetTempName()
+        If Not IsMissing(ext) Then CreateTemporaryFilePath = CreateTemporaryFilePath & "." & ext
+    End With
+End Function
+
 '''指定したバイナリをBase64に変換する
 '''引数
 '''  buf     / I / 入力バイナリ
@@ -123,7 +134,7 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
     Static B64CHR() As String
     Dim Result As String
     Dim idx As Long
-    Dim Pos As Integer
+    Dim pos As Integer
 
     If (Not B64CHR) = -1 Then
         For idx = Asc("A") To Asc("Z"): AddArrayText B64CHR, Chr(idx): Next idx
@@ -143,40 +154,40 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
     idx = LBound(buf)
     Do Until idx > UBound(buf)
         'AAAAAAxx ⇒ AAAAAA
-        Pos = Int(buf(idx) / 4)
-        Result = Result & B64CHR(Pos)
+        pos = Int(buf(idx) / 4)
+        Result = Result & B64CHR(pos)
 
         'xxxxxxBB ⇒ BB0000
-        Pos = (buf(idx) Mod 4) * 16
+        pos = (buf(idx) Mod 4) * 16
 
         idx = idx + 1
         If idx > UBound(buf) Then
-            Result = Result & B64CHR(Pos) & "=="
+            Result = Result & B64CHR(pos) & "=="
             Exit Do
         End If
 
         'BBBBxxxx ⇒ BBBB
         'BB0000 + BBBB = BBBBBB
-        Pos = Pos + Int(buf(idx) / 16)
-        Result = Result & B64CHR(Pos)
+        pos = pos + Int(buf(idx) / 16)
+        Result = Result & B64CHR(pos)
 
         'xxxxCCCC ⇒ CCCC00
-        Pos = (buf(idx) Mod 16) * 4
+        pos = (buf(idx) Mod 16) * 4
 
         idx = idx + 1
         If idx > UBound(buf) Then
-            Result = Result & B64CHR(Pos) & "="
+            Result = Result & B64CHR(pos) & "="
             Exit Do
         End If
 
         'CCxxxxxx ⇒ CC
         'CCCC00 + CC = CCCCCC
-        Pos = Pos + Int(buf(idx) / 64)
-        Result = Result & B64CHR(Pos)
+        pos = pos + Int(buf(idx) / 64)
+        Result = Result & B64CHR(pos)
 
         'xxDDDDDD ⇒ DDDDDD
-        Pos = buf(idx) Mod 64
-        Result = Result & B64CHR(Pos)
+        pos = buf(idx) Mod 64
+        Result = Result & B64CHR(pos)
 
         idx = idx + 1
 
@@ -187,3 +198,15 @@ Public Function ConvertBase64(ByRef buf() As Byte, Optional ByVal folding As Boo
     Loop
     ConvertBase64 = Result
 End Function
+
+'''Long形式の色をR,G,Bに分解する。
+''' @param lColor / I / Long形式の色。&hFFFFFFでマスクして使用する。
+''' @param iR     / O / 赤要素。0～255
+''' @param iG     / O / 緑要素。0～255
+''' @param iB     / O / 青要素。0～255
+Public Sub SplitRGB(ByVal lColor As Long, ByRef iR As Byte, ByRef iG As Byte, ByRef iB As Byte)
+    lColor = lColor And &HFFFFFF
+    iR = &HFF And lColor
+    iG = &HFF And (lColor \ &H100)
+    iB = &HFF And (lColor \ &H10000)
+End Sub

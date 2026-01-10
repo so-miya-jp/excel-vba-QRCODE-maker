@@ -54,12 +54,14 @@ Public Function ExportBMPFile(ByVal Path As String, ByRef pData() As Variant, Op
 
     ExportBMPFile = False
 
+    'ビットマップ情報の生成
     If Not CreateBMPInfo(bmpInfo, pData, pColors, pDpi) Then
         Exit Function
     End If
 
     On Error GoTo OutputError
 
+    '既存ファイルの削除
     If Dir(Path) <> "" Then Kill Path
 
     fileNo = FreeFile()
@@ -166,8 +168,8 @@ Public Function CreateIndexMap(ByRef pIndexMap() As Variant, ByRef pColors() As 
 
     'カラーインデックスに対応したインデックス2次元マップ作成
     ReDim pIndexMap(LBound(p24ColorMap, 1) To UBound(p24ColorMap, 1), LBound(p24ColorMap, 2) To UBound(p24ColorMap, 2))
-    For rIdx = LBound(pIndexMap, 2) To UBound(pIndexMap, 2)
-        For cIdx = LBound(pIndexMap, 1) To UBound(pIndexMap, 1)
+    For rIdx = LBound(pIndexMap, 1) To UBound(pIndexMap, 1)
+        For cIdx = LBound(pIndexMap, 2) To UBound(pIndexMap, 2)
             For lIdx = LBound(pColors) To UBound(pColors)
                 If pColors(lIdx) = p24ColorMap(rIdx, cIdx) Then
                     pIndexMap(rIdx, cIdx) = lIdx
@@ -221,10 +223,10 @@ Private Function CreateBMPInfo(ByRef info As tBITMAPINFO, ByRef pData() As Varia
         On Error GoTo 0
 
         If ClrUsed <= 0 Then
-            Exit Function
-        End If
+            ClrUsed = 0
+            BitCount = 24
 
-        If ClrUsed <= 2 Then
+        ElseIf ClrUsed <= 2 Then
             BitCount = 1
 
         ElseIf ClrUsed <= 16 Then
@@ -237,12 +239,14 @@ Private Function CreateBMPInfo(ByRef info As tBITMAPINFO, ByRef pData() As Varia
             Exit Function
         End If
 
-        ReDim info.colorMap(LBound(pColors) To UBound(pColors))
-        For idx = LBound(pColors) To UBound(pColors)
-            With info.colorMap(idx)
-                SplitRGB CLng(pColors(idx)), .rgbRed, .rgbGreen, .rgbBlue
-            End With
-        Next idx
+        If ClrUsed > 0 Then
+            ReDim info.colorMap(LBound(pColors) To UBound(pColors))
+            For idx = LBound(pColors) To UBound(pColors)
+                With info.colorMap(idx)
+                    SplitRGB CLng(pColors(idx)), .rgbRed, .rgbGreen, .rgbBlue
+                End With
+            Next idx
+        End If
     End If
 
     'ビット数と画像幅からバイト単位画面幅とパディングを計算

@@ -137,6 +137,11 @@ Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal Fil
         isLink = msoFalse
 
     Else
+        If InStr(FilePath, "\") = 0 Then
+            'ファイル名のみの場合
+            FilePath = Application.ThisWorkbook.Path & "\" & FilePath
+        End If
+
         isLink = msoTrue
     End If
 
@@ -152,7 +157,8 @@ Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal Fil
     End If
 
     If (Not colors) = -1 Then
-        'カラーインデックスがない場合、24bitカラー2次元マップを生成
+        'カラーインデックスがない場合
+        'QRコードと要素画像をかけ合わせて24bitカラー2次元マップを生成
         BuildImage bmpBody, ar, eImg, bgColor
 
         'BMP画像を出力
@@ -161,7 +167,8 @@ Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal Fil
         End If
 
     Else
-        'カラーインデックスがある場合、インデックスカラー2次元マップを生成
+        'カラーインデックスがある場合
+        'QRコードと要素画像をかけ合わせてインデックスカラー2次元マップを生成
         BuildImage bmpBody, ar, eImg, 0
 
         'BMP画像を出力

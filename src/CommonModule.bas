@@ -26,7 +26,7 @@ End Sub
 '''  sh      / I / 指定シート
 '''  needVal / I / Trueの場合、ブランク行をスキップする。(省略時はTrue)
 '''戻り値
-'''  有効値のある最終行
+'''  有効値のある最終行。有効値が存在しない場合は1を返却。
 Public Function GetLastUsedRow(ByRef sh As Worksheet, Optional needVal As Boolean = True) As Long
     With sh.UsedRange
         '使用Rangeの最終行を取得
@@ -35,13 +35,12 @@ Public Function GetLastUsedRow(ByRef sh As Worksheet, Optional needVal As Boolea
 
     If Not needVal Then Exit Function
 
-    With sh
-        'UsedRangeは書式だけ変更された行もカウントするので
-        'ブランク行を後からスキップする。
-        Do While IsBlankRange(sh.Rows(GetLastUsedRow))
-            GetLastUsedRow = GetLastUsedRow - 1
-        Loop
-    End With
+    'UsedRangeは書式だけ変更された行もカウントするので
+    'ブランク行を後からスキップする。
+    Do While IsBlankRange(sh.Range(CStr(GetLastUsedRow) & ":" & CStr(GetLastUsedRow)))
+        GetLastUsedRow = GetLastUsedRow - 1
+        If GetLastUsedRow = 1 Then Exit Do
+    Loop
 End Function
 
 '''指定Rangeが全てブランクかどうかを判定する。

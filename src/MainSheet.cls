@@ -72,11 +72,12 @@ Sub OutputQRCode_Click()
         End If
 
         If InStr(shNameChunk, "#" & tSh.Name & "#") > 0 Then
-            outRow = GetLastUsedRow(tSh) + 2
+            outRow = GetLastUsedRow(tSh) + 6
 
         Else
             shNameChunk = shNameChunk & tSh.Name & "#"
             tSh.Cells.Clear
+            tSh.Cells.ClearFormats
             outRow = 1
         End If
 
@@ -158,7 +159,7 @@ Sub SelectFile_Click()
     End If
 
     With Application.FileDialog(msoFileDialogFilePicker)
-        .Title = "分割対象のテキストファイルを選択してください。"
+        .Title = "分割対象のファイルを選択してください。"
         .AllowMultiSelect = False
         .InitialFileName = Path
 

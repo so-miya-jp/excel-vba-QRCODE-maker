@@ -19,6 +19,7 @@ Public Sub WriteQRCode(ByRef pRng As Range, ByRef pInfo As String, ByVal pTarget
     Subject = Replace(Subject, vbCrLf, " ")
     Subject = Replace(Subject, vbLf, " ")
     pRng.Value = Subject
+    pRng.RowHeight = 19.5
 
     If GetQRCode(ar, pInfo, pTarget, pECL) Then
         OutputRange pRng.Offset(1, 0), ar

@@ -85,6 +85,12 @@ Public COUNT_LENGTH() As Variant
 Private Sub Init()
     IsMs = (VarType(Asc("A")) = vbInteger)
     ErrTxt = ""
+
+    ' mode indicator (1=num,2=AlNum,4=Byte,8=kanji,ECI=7)
+    '      mode: Byte Alhanum  Numeric  Kanji
+    ' ver 1..9 :  8      9       10       8
+    '   10..26 : 16     11       12      10
+    '   27..40 : 16     13       14      12
     COUNT_LENGTH = [{10, 12, 14; 9, 11, 13; 8, 16, 16; 8, 10, 12}]
 End Sub
 
@@ -190,9 +196,9 @@ End Sub
 ''' @param pECL  / I / エラー補正レベル
 ''' @return 生成したQRコード(a～pとvbLfで構成された文字列。a～pは2x2マスのビット状態を指す)
 Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLevel) As String
-    Dim encoded1() As Byte
+    Dim encoded1() As Byte  ' byte mode (ASCII) all max 3200 bytes
     Dim eb() As tEbItem
-    Dim qrArr() As Byte
+    Dim qrArr() As Byte ' final matrix
     Dim qrParam As tParams
 
     If pText = "" Then
@@ -206,7 +212,7 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
     'エラー補正レベルpECLとエンコードブロックebからQRコード情報qrParamを決定
     QR_params pECL, eb, qrParam
 
-#If DEBUG_ = 1 Then
+#If DEBUG_ > 1 Then
     QR_debugEb pText, eb, qrParam
 #End If
 
@@ -215,7 +221,7 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
         Exit Function
     End If
 
-#If DEBUG_ = 1 Then
+#If DEBUG_ > 0 Then
     Debug.Print "ver:" & qrParam.Ver & "  Siz:" & qrParam.Siz & "  ccs:" & qrParam.ccSiz & "  ccb:" & qrParam.ccBlks _
               & "  d:" & (qrParam.ttlByt - qrParam.ccSiz * qrParam.ccBlks)
 #End If
@@ -226,8 +232,9 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
     End If
 
     'リードソロモン符号
-    'supplement ECC
+    ' supplement ECC (doplnime ECC)
     With qrParam
+        'ppoly, pmemptr , psize , plen , pblocks
         QR_rs &H11D, encoded1, .ttlByt - .ccSiz * .ccBlks, .ccSiz * .ccBlks, .ccBlks
     End With
 
@@ -236,6 +243,8 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
 
     'QR配列qrArrにエンコードバイナリencoded1を埋め込む
     With qrParam
+        ' qr_fill(parr as Variant, psiz%, pb as Variant, pblocks%, pdlen%, ptlen%)
+        ' vyplni pole parr (psiz x 24 bytes) z pole pb pdlen = pocet dbytes, pblocks = bloku, ptlen celkem
         QR_fill qrArr, .Siz, encoded1, .ccBlks, .ttlByt - .ccSiz * .ccBlks, .ttlByt
     End With
 
@@ -268,13 +277,13 @@ Private Sub QR_anlyz(ByVal pText As String, ByRef eb() As tEbItem)
     For idx = 1 To Len(pText)
         ch = Mid(pText, idx, 1)
         utfCd = AscL(ch)
-        If utfCd >= &H1FFFFF Then
+        If utfCd >= &H1FFFFF Then ' FFFF - 1FFFFFFF
             bytSiz(idx) = 4
 
-        ElseIf utfCd >= &H7FF Then
+        ElseIf utfCd >= &H7FF Then ' 7FF-FFFF 3 bytes
             bytSiz(idx) = 3
 
-        ElseIf utfCd >= &H80 Then
+        ElseIf utfCd >= &H80 Then ' 2 bytes
             bytSiz(idx) = 2
 
         Else
@@ -781,7 +790,7 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
                 bIdx = bIdx + 1
 
             Case TYP_BYTE
-                If k > &H1FFFFF Then
+                If k > &H1FFFFF Then ' FFFF - 1FFFFFFF
                     bits = &HF0 + Int(k / &H40000) Mod 8
                     BB_putBits encArr, encIdx, bits, 8
 
@@ -795,7 +804,7 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
                     BB_putBits encArr, encIdx, bits, 8
                     bIdx = bIdx + 4
 
-                ElseIf k > &H7FF Then
+                ElseIf k > &H7FF Then ' 7FF-FFFF 3 bytes
                     bits = &HE0 + Int(k / &H1000) Mod &H10
                     BB_putBits encArr, encIdx, bits, 8
 
@@ -806,7 +815,7 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
                     BB_putBits encArr, encIdx, bits, 8
                     bIdx = bIdx + 3
 
-                ElseIf k > &H7F Then
+                ElseIf k > &H7F Then ' 2 bytes
                     bits = &HC0 + Int(k / &H40) Mod &H20
                     BB_putBits encArr, encIdx, bits, 8
 
@@ -836,6 +845,10 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
                 BB_putBits encArr, encIdx, r, 6
             End If
         End Select
+
+#If DEBUG_ > 1 Then
+        Debug.Print "blk[" & eIdx & "] t:" & eb(eIdx).Typ & "from " & eb(eIdx).Pos & " to " & eb(eIdx).Cnt + eb(eIdx).Pos & " bits=" & encIdx
+#End If
     End With: Next eIdx
 
     'end of chain
@@ -854,7 +867,7 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
         Exit Function
     End If
 
-    'padding 0xEC, 0x11, 0xEC, 0x11
+    'padding 0xEC, 0x11, 0xEC, 0x11...
     Do While encIdx < idx
         BB_putBits encArr, encIdx, &HEC11, 16
     Loop
@@ -977,37 +990,55 @@ Private Sub QR_initArr(ByRef qrParam As tParams, ByRef qrArr() As Byte)
 
     Siz = qrParam.Siz
 
-    ReDim qrArr(0 To 1, 0 To (Siz + 1) * 24&)
+    ' Pole pro vystup
+    ReDim qrArr(0 To 1, 0 To (Siz + 1) * 24&) ' 24 bytes per row
     qrArr(0, 0) = 0
     ch = 0
 
     BB_putBits qrSync1, ch, Array(&HFE, &H82, &HBA, &HBA, &HBA, &H82, &HFE, 0), 64
+    ' sync UL
     QR_mask qrArr, qrSync1, 8, 0, 0
+    ' fmtinfo UL under - bity 14..9 SYNC 8
     QR_mask qrArr, 0, 8, 8, 0
+    ' sync UR ( o bit vlevo )
     QR_mask qrArr, qrSync1, 8, 0, Siz - 7
+    ' fmtinfo UR - bity 7..0
     QR_mask qrArr, 0, 8, 8, Siz - 8
+    ' sync DL (zasahuje i do quiet zony)
     QR_mask qrArr, qrSync1, 8, Siz - 7, 0
+    ' blank nad DL
     QR_mask qrArr, 0, 8, Siz - 8, 0
 
     For idx = 0 To 6
+        ' svisle fmtinfo UL - bity 0..5 SYNC 6,7
         QR_bit qrArr, -1, idx, 8, 0
+        ' svisly blank pred UR
         QR_bit qrArr, -1, idx, Siz - 8, 0
+        ' svisle fmtinfo DL - bity 14..8
         QR_bit qrArr, -1, Siz - 1 - idx, 8, 0
     Next idx
 
+    ' svisle fmtinfo UL - bity 0..5 SYNC 6,7
     QR_bit qrArr, -1, 7, 8, 0
+    ' svisly blank pred UR
     QR_bit qrArr, -1, 7, Siz - 8, 0
+    ' svisle fmtinfo UL - bity 0..5 SYNC 6,7
     QR_bit qrArr, -1, 8, 8, 0
+    ' black dot DL
     QR_bit qrArr, -1, Siz - 8, 8, 1
 
     'version info
     If qrParam.verInf <> 0& Then
+        ' UR ver 0 1 2;3 4 5;...;15 16 17
+        ' LL ver 0 3 6 9 12 15;1 4 7 10 13 16; 2 5 8 11 14 17
         k = qrParam.verInf
         c = 0
         r = 0
         For idx = 0 To 17
             ch = k Mod 2
+            ' UR ver
             QR_bit qrArr, -1, r, Siz - 11 + c, ch
+            ' DL ver
             QR_bit qrArr, -1, Siz - 11 + c, r, ch
             c = c + 1
             If c > 2 Then
@@ -1021,7 +1052,9 @@ Private Sub QR_initArr(ByRef qrParam As tParams, ByRef qrArr() As Byte)
     'sync line
     c = 1
     For idx = 8 To Siz - 9
+        ' vertical on column 6
         QR_bit qrArr, -1, idx, 6, c
+        ' horizontal on row 6
         QR_bit qrArr, -1, 6, idx, c
         c = (c + 1) Mod 2
     Next idx
@@ -1034,6 +1067,7 @@ Private Sub QR_initArr(ByRef qrParam As tParams, ByRef qrArr() As Byte)
             ch = UBound(.syncs)
             For c = 0 To ch
                 For r = 0 To ch
+                    ' corners
                     If (c <> 0 Or r <> 0) And _
                        (c <> ch Or r <> 0) And _
                        (c <> 0 Or r <> ch) Then
@@ -1107,6 +1141,8 @@ End Sub
 ''' @param pDatLen / I / データ長
 ''' @param pTtlLen / I / 全体サイズ
 Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr() As Byte, ByVal pBlkSiz As Integer, ByVal pDatLen As Integer, ByVal pTtlLen As Integer)
+    ' vyplni pole parr (psiz x 24 bytes) z pole pb pdlen = pocet dbytes, pblocks = bloku, ptlen celkem
+    ' podle logiky qr_kodu - s prokladem
     Dim vds As Integer, ves As Integer, vDnLen As Integer, vsb As Integer
     Dim vx As Integer, vy As Integer
     Dim vb As Integer
@@ -1114,13 +1150,18 @@ Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr()
     Dim wa As Integer, wb As Integer, w As Integer
     Dim smer As Integer
 
-    vds = Int(pDatLen / pBlkSiz)
-    ves = Int((pTtlLen - pDatLen) / pBlkSiz)
-    vDnLen = vds * pBlkSiz
-    vsb = pBlkSiz - (pDatLen Mod pBlkSiz)
+    ' qr code has first x blocks shorter than lasts but datamatrix has first longer and shorter last
+    vds = Int(pDatLen / pBlkSiz) ' shorter data block size
+    ves = Int((pTtlLen - pDatLen) / pBlkSiz) ' ecc block size
+    vDnLen = vds * pBlkSiz ' potud jsou databloky stejne velike
+    vsb = pBlkSiz - (pDatLen Mod pBlkSiz) ' mensich databloku je ?
 
+    ' start position on right lower corner
     cIdx = pSiz - 1
     rIdx = cIdx
+
+    ' nahoru :  3 <- 2 10  dolu: 1 <- 0  32
+    '           1 <- 0 10        3 <- 2  32
     smer = 0
     vb = 1
     w = encArr(1)
@@ -1129,7 +1170,7 @@ Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr()
         If QR_bit(qrArr, pSiz, rIdx, cIdx, (w And 128)) Then
             vx = vx + 1
             If vx = 8 Then
-                GoSub qrf_NextByte
+                GoSub qrf_NextByte ' first byte
                 vx = 0
 
             Else
@@ -1138,28 +1179,32 @@ Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr()
         End If
 
         Select Case smer
-        Case 0, 2
+        Case 0, 2 ' nahoru nebo dolu a jsem vpravo
             cIdx = cIdx - 1
             smer = smer + 1
 
-        Case 1
-            If rIdx = 0 Then
+        Case 1 ' nahoru a jsem vlevo
+            If rIdx = 0 Then ' nahoru uz to nejde
                 cIdx = cIdx - 1
                 If cIdx = 6 And pSiz >= 21 Then
+                    ' preskoc sync na sloupci 6
                     cIdx = cIdx - 1
                 End If
+                ' a jedeme dolu
                 smer = 2
 
             Else
                 cIdx = cIdx + 1
                 rIdx = rIdx - 1
+                ' furt nahoru
                 smer = 0
             End If
 
-        Case 3
-            If rIdx = pSiz - 1 Then
+        Case 3 ' dolu a jsem vlevo
+            If rIdx = pSiz - 1 Then ' dolu uz to nepude
                 cIdx = cIdx - 1
                 If cIdx = 6 And pSiz >= 21 Then
+                    ' preskoc sync na sloupci 6
                     cIdx = cIdx - 1
                 End If
                 smer = 0
@@ -1175,7 +1220,16 @@ Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr()
     Exit Sub
 
 qrf_NextByte:
-    If vb < pDatLen Then
+    ' next byte
+        ' plen = 14 pbl = 3   => 1x4 + 2x5 (v_b2c = 3 - 2 = 1; v_bs1 = 4)
+        '     v_b = 0 => v_last = 0 + 4 * 3 - 2 = 10 => 1..12 by 3   1,4,7,10
+        '     v_b = 1 => v_last = 1 + 4 * 3     = 13 => 2..13 by 3   2,5,8,11,13
+        '     v_b = 2 => v_last = 2 + 4 * 3     = 14 => 3..14 by 3   3,6,9,12,14
+        ' plen = 15 pbl = 3   => 3x5 (v_b2c = 3; v_bs1 = 5)
+        '     v_b = 0 => v_last = 0 + 5 * 3 - 2 = 13 => 1..13 by 3   1,4,7,10,13
+        '     v_b = 1 => v_last = 1 + 5 * 3 - 2 = 14 => 2..14 by 3   2,5,8,11,14
+        '     v_b = 2 => v_last = 2 + 5 * 3 - 2 = 15 => 3..15 by 3   3,6,9,12,15
+    If vb < pDatLen Then ' Datovy byte
         wa = vb
         If vb >= vDnLen Then
             wa = wa + vsb
@@ -1186,6 +1240,9 @@ qrf_NextByte:
         If wb > vsb Then
             wa = wa + wb - vsb
         End If
+#If DEBUG_ > 1 Then
+        If vb >= vDnLen Then Debug.Print "D:" & (1 + vds * wb + wa)
+#End If
 
         w = encArr(1 + vds * wb + wa)
 
@@ -1193,6 +1250,9 @@ qrf_NextByte:
         wa = vb - pDatLen
         wb = wa Mod pBlkSiz
         wa = Int(wa / pBlkSiz)
+#If DEBUG_ > 1 Then
+        Debug.Print "E:" & (1 + pDatLen + ves * wb + wa)
+#End If
         w = encArr(1 + pDatLen + ves * wb + wa)
     End If
     vb = vb + 1
@@ -1215,11 +1275,17 @@ Private Sub QR_maskArr(ByRef qrParam As tParams, ByVal pECL As eErrorCorrectionL
     For idx = 0 To 7
         QR_maskArr_addMM qrArr, pECL, Siz, idx
         score = QR_xorMask(qrArr, Siz, idx, False)
+#If DEBUG_ > 0 Then
+        Debug.Print "score mask " & mask & " is " & score
+#End If
         If score < minScore Or minScore = -1 Then
             minScore = score
             mask = idx
         End If
     Next idx
+#If DEBUG_ > 0 Then
+    Debug.Print "best is " & mask & " with score " & minScore
+#End If
 
     QR_maskArr_addMM qrArr, pECL, Siz, mask
     score = QR_xorMask(qrArr, Siz, mask, True)
@@ -1232,7 +1298,11 @@ Private Sub QR_maskArr_addMM(ByRef qrArr() As Byte, ByVal pECL As eErrorCorrecti
     Dim rIdx As Integer, cIdx As Integer
 
     k = pECL * 8 + mask
+    ' poly: 101 0011 0111
     QR_bch_calc k, &H537
+#If DEBUG_ > 0 Then
+    Debug.Print "mask :" & Hex(k, 3) & " " & Hex(k Xor &H5412, 3)
+#End If
     k = k Xor &H5412
 
     rIdx = 0
@@ -1240,13 +1310,15 @@ Private Sub QR_maskArr_addMM(ByRef qrArr() As Byte, ByVal pECL As eErrorCorrecti
     For idx = 0 To 14
         ch = k Mod 2
         k = Int(k / 2)
+        ' svisle fmtinfo UL - bity 0..5 SYNC 6,7 .... 8..14 dole
         QR_bit qrArr, -1, rIdx, 8, ch
+        ' vodorovne odzadu 0..7 ............ 8,SYNC,9..14
         QR_bit qrArr, -1, 8, cIdx, ch
         cIdx = cIdx - 1
         rIdx = rIdx + 1
         If idx = 7 Then cIdx = 7: rIdx = Siz - 7
-        If idx = 5 Then rIdx = rIdx + 1
-        If idx = 8 Then cIdx = cIdx - 1
+        If idx = 5 Then rIdx = rIdx + 1 ' preskoc sync vodorvny
+        If idx = 8 Then cIdx = cIdx - 1 ' preskoc sync svisly
     Next idx
 End Sub
 
@@ -1333,6 +1405,11 @@ Private Function QR_xorMask_scoring(ByRef qrArr() As Byte, ByRef wArr() As Byte,
     Dim m As Integer
     Dim cols() As Long
 
+    ' score computing
+    ' a) adjacent modules colors in row or column 5+i mods = 3 + i penatly
+    ' b) block same color MxN = 3*(M-1)*(N-1) penalty OR every 2x2 block penalty + 3
+    ' c) 4:1:1:3:1:1 or 1:1:3:1:1:4 in row or column = 40 penalty rmks: 00001011101 or 10111010000 = &H05D or &H5D0
+    ' d) black/light ratio : k=(abs(ratio% - 50) DIV 5) means 10*k penalty
     score = 0
     bl = 0
     ReDim cols(1, pSiz)
@@ -1344,52 +1421,54 @@ Private Function QR_xorMask_scoring(ByRef qrArr() As Byte, ByRef wArr() As Byte,
         rp = 0
         rc = 0
         For cIdx = 0 To pSiz - 1
-            rp = (rp And &H3FF) * 2
+            rp = (rp And &H3FF) * 2 ' only last 12 bits
             cols(1, cIdx) = (cols(1, cIdx) And &H3FF) * 2
             If (wArr(idx) And m) <> 0 Then
-                If rc < 0 Then
+                If rc < 0 Then ' in row x whites
                     If rc <= -5 Then score = score - 2 - rc
                     rc = 0
                 End If
-                rc = rc + 1
-                If cols(0, cIdx) < 0 Then
+                rc = rc + 1 ' one more black
+                If cols(0, cIdx) < 0 Then ' color changed
                     If cols(0, cIdx) <= -5 Then score = score - 2 - cols(0, cIdx)
                     cols(0, cIdx) = 0
                 End If
-                cols(0, cIdx) = cols(0, cIdx) + 1
+                cols(0, cIdx) = cols(0, cIdx) + 1 ' one more black
                 rp = rp Or 1
                 cols(1, cIdx) = cols(1, cIdx) Or 1
-                bl = bl + 1
+                bl = bl + 1 ' balck modules count
 
             Else
-                If rc > 0 Then
-                    If rc >= 5 Then score = score - 2 + rc
+                If rc > 0 Then ' in row x black
+                    If rc >= 5 Then score = score - 2 + rc ': s(0) = s(0) - 2 + rc
                     rc = 0
                 End If
-                rc = rc - 1
-                If cols(0, cIdx) > 0 Then
+                rc = rc - 1 ' one more white
+                If cols(0, cIdx) > 0 Then ' color changed
                     If cols(0, cIdx) >= 5 Then score = score - 2 + cols(0, cIdx)
                     cols(0, cIdx) = 0
                 End If
-                cols(0, cIdx) = cols(0, cIdx) - 1
+                cols(0, cIdx) = cols(0, cIdx) - 1 ' one more white
             End If
 
-            If cIdx > 0 And rIdx > 0 Then
-                i = rp And 3
+            If cIdx > 0 And rIdx > 0 Then ' penalty block 2x2
+                i = rp And 3 ' current row pair
                 If (cols(1, cIdx - 1) And 3) >= 2 Then i = i + 8
                 If (cols(1, cIdx) And 3) >= 2 Then i = i + 4
                 If i = 0 Or i = 15 Then
                     score = score + 3
+                    ' b) penalty na 2x2 block same color
                 End If
             End If
 
-            If cIdx >= 10 And (rp = &H5D Or rp = &H5D0) Then
+            If cIdx >= 10 And (rp = &H5D Or rp = &H5D0) Then  ' penalty pattern c in row
                 score = score + 40
             End If
-            If rIdx >= 10 And (cols(1, cIdx) = &H5D Or cols(1, cIdx) = &H5D0) Then
+            If rIdx >= 10 And (cols(1, cIdx) = &H5D Or cols(1, cIdx) = &H5D0) Then ' penalty pattern c in column
                 score = score + 40
             End If
 
+            ' next mask / byte
             If m = 128 Then
                 m = 1
                 idx = idx + 1
@@ -1400,21 +1479,20 @@ Private Function QR_xorMask_scoring(ByRef qrArr() As Byte, ByRef wArr() As Byte,
         If Abs(rc) >= 5 Then score = score - 2 + Abs(rc)
     Next rIdx
 
-    For cIdx = 0 To pSiz - 1
+    For cIdx = 0 To pSiz - 1 ' after last row count column blocks
         If Abs(cols(0, cIdx)) >= 5 Then score = score - 2 + Abs(cols(0, cIdx))
     Next cIdx
     bl = Int(Abs((bl * 100&) / (pSiz * pSiz) - 50&) / 5) * 10
-
     QR_xorMask_scoring = score + bl
 End Function
 
 '''ビット計算
-''' @param qrArr / IO /
-''' @param pSiz  / I /
-''' @param pRow  / I /
-''' @param pCol  / I /
-''' @param pBit  / I /
-''' @return Variant
+''' @param qrArr / IO / QR配列
+''' @param pSiz  / I / QR_fillから呼ばれた場合、qrParam.Siz。それ以外では-1。0になることはありません。
+''' @param pRow  / I / 行
+''' @param pCol  / I / 列
+''' @param pBit  / I / ビット
+''' @return TrueまたはFalse
 Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow As Integer, ByVal pCol As Integer, ByVal pBit As Integer)
     Dim idx As Integer
     Dim Value As Integer
@@ -1423,7 +1501,7 @@ Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow
     rIdx = pRow
     cIdx = pCol
     QR_bit = False
-    idx = rIdx * 24 + Int(cIdx / 8)
+    idx = rIdx * 24 + Int(cIdx / 8) ' 24 bytes per row
     If idx > UBound(qrArr, 2) Or idx < 0 Then
         outErr "QR_bit : out of range"
         Exit Function
@@ -1432,6 +1510,7 @@ Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow
     cIdx = 2 ^ (cIdx Mod 8)
     Value = qrArr(0, idx)
     If pSiz > 0 Then
+        ' Kontrola masky
         If (Value And cIdx) = 0 Then
             If pBit <> 0 Then
                 qrArr(1, idx) = qrArr(1, idx) Or cIdx
@@ -1444,14 +1523,19 @@ Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow
 
     Else
         QR_bit = True
-        qrArr(1, idx) = qrArr(1, idx) And (255 - cIdx)
+        qrArr(1, idx) = qrArr(1, idx) And (255 - cIdx) ' reset bit for psiz <= 0
         If pBit > 0 Then qrArr(1, idx) = qrArr(1, idx) Or cIdx
-        If pSiz < 0 Then qrArr(0, idx) = qrArr(0, idx) Or cIdx
+        If pSiz < 0 Then qrArr(0, idx) = qrArr(0, idx) Or cIdx ' mask for psiz < 0
     End If
 End Function
 
+' padding 0xEC,0x11,0xEC,0x11...
+' TYPE_INFO_MASK_PATTERN = 0x5412
+' TYPE_INFO_POLY = 0x537  [(ecLevel << 3) | maskPattern] : 5 + 10 = 15 bitu
+' VERSION_INFO_POLY = 0x1f25 : 5 + 12 = 17 bitu
 Private Sub QR_bch_calc(ByRef data As Long, ByVal poly As Long)
     Dim b%, n%, rv&, x&
+
     If data = 0 Then Exit Sub
 
     b = QR_numbits(poly) - 1

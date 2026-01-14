@@ -162,20 +162,15 @@ Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal Fil
         'QRコードと要素画像をかけ合わせて24bitカラー2次元マップを生成
         BuildImage bmpBody, ar, eImg, bgColor
 
-        'BMP画像を出力
-        If Not ExportBMPFile(FilePath, bmpBody) Then
-            Exit Sub
-        End If
-
     Else
         'カラーインデックスがある場合
         'QRコードと要素画像をかけ合わせてインデックスカラー2次元マップを生成
         BuildImage bmpBody, ar, eImg, 0
+    End If
 
-        'BMP画像を出力
-        If Not ExportBMPFile(FilePath, bmpBody, colors) Then
-            Exit Sub
-        End If
+    'BMP画像を出力
+    If Not ExportBMPFile(FilePath, bmpBody, colors) Then
+        Exit Sub
     End If
 
     '生成したBMP画像を表示する
@@ -255,4 +250,20 @@ Private Sub BuildImage(ByRef pResult() As Variant, ByRef pD2Code() As Variant, B
             Next reIdx
         Next cdIdx
     Next rdIdx
+End Sub
+
+'''24bitカラー試験用の要素作成。
+'''256個超過のセル(縦横17x17とか)を選択して実行。
+Private Sub Test_Create24BitElement()
+    Dim Rng As Range
+    Dim r%, c%, a%, b%
+
+    Set Rng = Selection
+    a = 256 \ Rng.Columns.Count
+    b = 256 \ Rng.Rows.Count
+    For r = 1 To Rng.Rows.Count
+        For c = 1 To Rng.Columns.Count
+            Rng.Cells(r, c).Interior.Color = RGB((r * b) Mod 256, (c * a) Mod 256, (r * b + c * a) Mod 256)
+        Next c
+    Next r
 End Sub

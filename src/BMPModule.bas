@@ -124,6 +124,13 @@ Public Function CreateIndexMap(ByRef pIndexMap() As Variant, ByRef pColors() As 
                     If clCand(0, lIdx) = clr Then Exit For
                 Next lIdx
                 If lIdx > UBound(clCand, 2) Then
+                    If lIdx > 255 Then
+                        '色候補数が256を超える場合
+                        CreateIndexMap = False
+
+                        Exit Function
+                    End If
+                    
                     ReDim Preserve clCand(0 To 1, 0 To lIdx)
                     clCand(0, lIdx) = clr
                     clCand(1, lIdx) = 1
@@ -134,13 +141,6 @@ Public Function CreateIndexMap(ByRef pIndexMap() As Variant, ByRef pColors() As 
             End If
         Next cIdx
     Next rIdx
-
-    If UBound(clCand, 2) > 255 Then
-        '色候補数が256を超える場合
-        CreateIndexMap = False
-
-        Exit Function
-    End If
 
     '固定色の次のインデックス
     base = 0

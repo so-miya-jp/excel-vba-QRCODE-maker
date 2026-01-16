@@ -183,7 +183,6 @@ Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal Fil
     End If
 End Sub
 
-
 '''要素画像の生成
 ''' @param pBody   / O / 24bitカラー2次元マップ、またはインデックスカラー2次元マップ
 ''' @param pColors / O / カラーインデックス
@@ -251,6 +250,65 @@ Private Sub BuildImage(ByRef pResult() As Variant, ByRef pD2Code() As Variant, B
         Next cdIdx
     Next rdIdx
 End Sub
+
+'''画像の読み込み。BMPファイルならば直接読み込みます。
+'''BMPファイル以外ならばBMPファイルに変換してから読み込みます。
+''' @param sh    / IO / 作業に使用するワークシート(一時的にオブジェクトを追加しますが、最終的には削除します。)
+''' @param Path  / I / 入力ファイルパス
+''' @param pData / O / 読み込んだ24bitカラーマップ
+''' @return 成功した場合はTrue
+Public Function ImportImage(ByVal Path As String, ByRef pData() As Long, Optional ByRef sh As Worksheet = Nothing) As Boolean
+    Dim errCd As eErrorCode
+    Dim TmpPath As String
+    Dim w As Single, h As Single
+
+    'BMPファイルの読み込み
+    If ImportBMPFile(Path, pData, errCd) Then
+        ImportImage = True
+        Exit Function
+    End If
+        
+    If errCd <> ERR_FORMAT And errCd <> ERR_WINDOWS And errCd <> ERR_COMPRESS Then
+        '読めない画像形式以外のエラー
+        ImportImage = False
+        Exit Function
+    End If
+
+    If sh Is Nothing Then
+        Set sh = ActiveSheet
+    End If
+
+    '一時ファイルパスの生成
+    TmpPath = CreateTemporaryFilePath("bmp")
+
+    Application.ScreenUpdating = False
+    With sh.Pictures.Insert(Path)
+        '画像の大きさを取得
+        w = .Width
+        h = .Height
+        'ピクチャーの削除
+        .Delete
+    End With
+    '画像の大きさのグラフを生成。
+    With sh.ChartObjects.Add(0, 0, w, h)
+        '背景画像として画像ファイルを読み込み
+        .Chart.SetBackgroundPicture Path
+        '枠線の消去
+        .ShapeRange.Line.Visible = msoFalse
+        'BMP画像としてエクスポート
+        '※DPI96として出力されるので、読み込んだ画像のDPIが96以外だと大きさが変わるので注意。
+        .Chart.Export TmpPath, "bmp"
+        'グラフの削除
+        .Delete
+    End With
+    Application.ScreenUpdating = True
+
+    '一時作成したBMPファイルを読み込み
+    ImportImage = ImportBMPFile(TmpPath, pData)
+
+    '一時ファイルの削除
+    Kill TmpPath
+End Function
 
 '''24bitカラー試験用の要素作成。
 '''256個超過のセル(縦横17x17とか)を選択して実行。

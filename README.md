@@ -112,7 +112,7 @@ https://code.google.com/archive/p/barcode-vba-macro-only/downloads
 - 漢字モードに対応しました。
 - UTF-8の3byte以上の文字が指定されたとき、正常に動作するようにしました。
 - オリジナルは出力先がShapeでしたが、2次元配列出力としてあります。
-- サイズ計算時にend of chainのサイズを考慮に入れるようにしました。
+- 常に4bit出力していたend of chainを出力可能な分だけ出すようにしました。
 - 解析のため、大きなサブルーチンを分解しました。ローカル変数の利用範囲を限定したかったので。
      - QR_genの大部分を以下のサブルーチンに分解しました。
        |サブルーチン名  |機能                    |元の記述位置                            |
@@ -136,7 +136,7 @@ https://code.google.com/archive/p/barcode-vba-macro-only/downloads
   |--------------|--------|--------|
   |tEcxItem     |QR_genにおけるecx_cnt(3)、ecx_pos(3)、ecx_poc(3) |解析している途中の文字種ごとのバイト数と位置と総バイト数を管理していました。ecx_pocは不要になったので削除しました。 |
   |tEbItem      |QR_genにおけるeb(20, 4)                          |解析結果を保持する部分。 |
-  |tParams      |QR_genにおけるqrp(15)                            |QR_paramsでバージョンとECLで決定されるパラメタを保持。 |
+  |tQRParams    |QR_genにおけるqrp(15)                            |QR_paramsでバージョンとECLで決定されるパラメタを保持。 |
 
 - 文字列解析を作り直しました。
      - オリジナルは数字のみの入力は英数字モードで出力しましたが、数字モードで出力します。

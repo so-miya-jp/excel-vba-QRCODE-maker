@@ -5,7 +5,7 @@ Rem オリジナルとは以下の点が異なります。
 Rem ・漢字モードに対応しました。
 Rem ・UTF-8の3byte以上の文字が指定されたとき、正常に動作するようにしました。
 Rem ・オリジナルは出力先がShapeでしたが、2次元配列出力としてあります。
-Rem ・サイズ計算時にend of chainのサイズを考慮に入れるようにしました。
+Rem ・常に4bit出力していたend of chainを出力可能な分だけ出すようにしました。
 Rem ・解析のため、大きなサブルーチンを分解しました。
 Rem ・解析のため、ユーザー定義を使用するようにしました。
 Rem ・文字列解析を作り直しました。
@@ -44,6 +44,36 @@ Public Enum eErrorCorrectionLevel
     ECL_Q = 3
 End Enum
 
+Public Enum eMaskType
+    MSK_AUTO = -1
+    MSK_000 = 0 ' (c + r) Mod 2 = 0
+    MSK_001 = 1 ' r Mod 2 = 0
+    MSK_010 = 2 ' c Mod 3 = 0
+    MSK_011 = 3 ' (c + r) Mod 3 = 0
+    MSK_100 = 4 ' (r div 2 + c div 3) Mod 2 = 0
+    MSK_101 = 5 ' (c * r) Mod 2 + (c * r) Mod 3 = 0
+    MSK_110 = 6 ' ((c * r) Mod 2 + (c * r) Mod 3) Mod 2 = 0
+    MSK_111 = 7 ' ((c + r) Mod 2 + (c * r) Mod 3) Mod 2 = 0
+End Enum
+
+'文字種パターンビット
+'1...数字
+'2...数字、大文字英字と少しの記号
+'4...全てのBYTE
+'8...SJIS漢字
+Private Enum ePrivateModeBit
+    MOD_NUM = 1
+    MOD_ALNUM = 2
+    MOD_ALNUMS = MOD_NUM Or MOD_ALNUM
+    MOD_BYTE = 4
+    MOD_KANJI = 8
+End Enum
+Public Enum eModeBit
+    MOD_BYTE_ONLY = MOD_BYTE
+    MOD_ALNUM_BYTE = MOD_NUM Or MOD_ALNUM Or MOD_BYTE
+    MOD_ALL = MOD_NUM Or MOD_ALNUM Or MOD_BYTE Or MOD_KANJI
+End Enum
+
 'モードタイプ
 Private Enum eType
     TYP_UNKNOWN = 0 '不明
@@ -67,7 +97,7 @@ Private Type tEbItem
 End Type
 
 'QRパラメータ
-Private Type tParams
+Private Type tQRParam
     Ver As Integer      'バージョン
     Siz As Integer      'サイズ
     ccSiz As Integer    'CCサイズ
@@ -95,19 +125,25 @@ Private Sub Init()
 End Sub
 
 '''変換対象文字列をQRコードに変換し、二次元配列に格納する。
-''' @param ar      / O / QRコードを格納する二次元配列
-''' @param pInfo   / O / 補足情報。変換成功時はバージョン文字列、変換失敗時はエラーメッセージを格納する。
-''' @param pTarget / I / 変換対象文字列
-''' @param pECL    / I / エラー補正レベル(省略時はECL_M)
+''' @param ar       / O / QRコードを格納する二次元配列
+''' @param pInfo    / O / 補足情報。変換成功時はバージョン文字列、変換失敗時はエラーメッセージを格納する。
+''' @param pTarget  / I / 変換対象文字列
+''' @param pECL     / I / エラー補正レベル(省略時はECL_M)
+''' @param pMaskPtn / I / マスクパターン(省略時はMSK_AUTO)
+''' @param pMode    / I / 文字種指定ビット(省略時はMOD_ALL)
 ''' @return 変換成功時はTrueを、それ以外はFalseを返却する。
-Public Function GetQRCode(ByRef ar() As Variant, ByRef pInfo As String, ByVal pTarget As String, Optional ByVal pECL As eErrorCorrectionLevel = ECL_M) As Boolean
+Public Function GetQRCode(ByRef ar() As Variant, ByRef pInfo As String, ByVal pTarget As String _
+        , Optional ByVal pECL As eErrorCorrectionLevel = ECL_M _
+        , Optional ByVal pMaskPtn As eMaskType = MSK_AUTO _
+        , Optional ByVal pMode As eModeBit = MOD_ALL _
+        ) As Boolean
     Dim barCode As String
 
     GetQRCode = False
 
     Init
 
-    barCode = QR_gen(pTarget, pECL)
+    barCode = QR_gen(pTarget, pECL, pMaskPtn, pMode)
     If barCode = "" Then
         pInfo = ErrTxt
         Exit Function
@@ -127,16 +163,20 @@ End Function
 '''指定した変換対象文字列がQRコードに変換可能である場合、1～40のバージョン番号を返却する。
 '''変換不可である場合、0を返却する。
 ''' @param pText / I / 変換対象文字列
-''' @param pECL  / I / エラー補正レベル
+''' @param pECL  / I / エラー補正レベル(省略時はECL_M)
+''' @param pMode / I / 文字種指定ビット(省略時はMOD_ALL)
 ''' @return バージョン番号、もしくは0
-Public Function CheckQRCode(ByVal pText As String, ByVal pECL As eErrorCorrectionLevel) As Integer
+Public Function CheckQRCode(ByVal pText As String _
+        , Optional ByVal pECL As eErrorCorrectionLevel = ECL_M _
+        , Optional ByVal pMode As eModeBit = MOD_ALL _
+        ) As Integer
     Dim eb() As tEbItem
     Dim Ver As Integer
     Dim dummy1%, dummy2&, dummy3%, dummy4%
 
     Init
 
-    QR_anlyz pText, eb
+    QR_anlyz pText, pMode, eb
 
     QR_search_params pECL, eb, Ver, dummy1, dummy2, dummy3, dummy4
 
@@ -192,22 +232,45 @@ Private Sub outErr(ByVal msg As String)
 End Sub
 
 '''QRコード生成
-''' @param pText / I / 変換対象文字列
-''' @param pECL  / I / エラー補正レベル
+''' @param pText    / I / 変換対象文字列
+''' @param pECL     / I / エラー補正レベル
+''' @param pMaskPtn / I / マスクパターン
+''' @param pMode    / I / 文字種指定ビット
 ''' @return 生成したQRコード(a～pとvbLfで構成された文字列。a～pは2x2マスのビット状態を指す)
-Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLevel) As String
+Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLevel, ByVal pMaskPtn As eMaskType, ByVal pMode As eModeBit) As String
     Dim encoded1() As Byte  ' byte mode (ASCII) all max 3200 bytes
     Dim eb() As tEbItem
     Dim qrArr() As Byte ' final matrix
-    Dim qrParam As tParams
+    Dim qrParam As tQRParam
 
     If pText = "" Then
         outErr "QR_gen : no data"
         Exit Function
     End If
 
+    Select Case pECL
+    Case ECL_L, ECL_M, ECL_Q, ECL_H
+        'nop
+    Case Else
+        outErr "QR_gen : error collection level error : " & pECL
+        Exit Function
+    End Select
+
+    Select Case pMaskPtn
+    Case MSK_AUTO, MSK_000 To MSK_111
+        'nop
+    Case Else
+        outErr "QR_gen : mask pattern error : " & pMaskPtn
+        Exit Function
+    End Select
+
+    If (pMode And MOD_BYTE_ONLY) <> MOD_BYTE_ONLY Then
+        outErr "QR_gen : encode bit pattern error : " & pMode
+        Exit Function
+    End If
+
     '変換対象文字列pTextを解析し、エンコードブロックebを生成
-    QR_anlyz pText, eb
+    QR_anlyz pText, pMode, eb
 
     'エラー補正レベルpECLとエンコードブロックebからQRコード情報qrParamを決定
     QR_params pECL, eb, qrParam
@@ -249,7 +312,7 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
     End With
 
     'マスクをかける
-    QR_maskArr qrParam, pECL, qrArr
+    QR_maskArr qrParam, pECL, pMaskPtn, qrArr
 
     '二次元バーコードに変換
     QR_gen = QR_makeAscMtrx(qrParam, qrArr)
@@ -257,8 +320,9 @@ End Function
 
 '''変換対象文字列の解析
 ''' @param pText / I / 変換対象文字列
+''' @param pMode / I / 文字種指定ビット
 ''' @param eb    / O / 解析結果。モード、位置、桁数を持つ配列
-Private Sub QR_anlyz(ByVal pText As String, ByRef eb() As tEbItem)
+Private Sub QR_anlyz(ByVal pText As String, ByVal pMode As eModeBit, ByRef eb() As tEbItem)
     Dim idx As Long
     Dim ch As String
     Dim utfCd As Long   'UTF code
@@ -297,7 +361,19 @@ Private Sub QR_anlyz(ByVal pText As String, ByRef eb() As tEbItem)
         nxTyp = TYP_BYTE
         Select Case ltSiz
         Case 1
-            anIdx = InStr(QR_ALNUM, ch) - 1
+            If (pMode And MOD_ALNUMS) = 0 Then
+                anIdx = -1
+
+            Else
+                anIdx = InStr(QR_ALNUM, ch) - 1
+                If anIdx < 10 Then
+                    If (pMode And MOD_NUM) = 0 Then anIdx = -1
+
+                ElseIf (pMode And MOD_ALNUM) = 0 Then
+                    anIdx = -1
+                End If
+            End If
+
             sjisCd = -1
             If anIdx >= 0 Then
                 nxTyp = TYP_NUM
@@ -310,8 +386,14 @@ Private Sub QR_anlyz(ByVal pText As String, ByRef eb() As tEbItem)
 
         Case Else
             anIdx = -1
-            sjisCd = QR_AscK(ch)
-            If sjisCd >= 0 Then nxTyp = TYP_KANJI
+            If (pMode And MOD_KANJI) = MOD_KANJI Then
+
+                sjisCd = QR_AscK(ch)
+                If sjisCd >= 0 Then nxTyp = TYP_KANJI
+
+            Else
+                sjisCd = -1
+            End If
         End Select
 
         If ecx(TYP_NUM).Cnt > 0 And (anIdx < 0 Or anIdx > 9) Then
@@ -363,8 +445,8 @@ FIN_NUMERIC:
                 Return
             End If
 
-        ElseIf ecx(TYP_NUM).Cnt < 5 Then
-            '数字の前後がALNUM以外のbyteで、数字が5桁未満の場合、byteとして出力予定
+        ElseIf ecx(TYP_NUM).Cnt < 5 And nxTyp <> TYP_KANJI Then
+            '数字の前後がALNUM以外のbyteで、数字の後が漢字ではなく、数字が5桁未満の場合、byteとして出力予定
             ecx(TYP_NUM).Cnt = 0
             ecx(TYP_ALNUM).Cnt = 0
             Return
@@ -402,8 +484,8 @@ FIN_ALPH_NUMERIC:
     If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And nxTyp = TYP_UNKNOWN Then
         'ALNUMの前後に未出力のbyteが存在しない場合
 
-    ElseIf ecx(TYP_ALNUM).Cnt < 8 Then
-        'ALNUMが8文字未満なのでbyteとして出力予定
+    ElseIf ecx(TYP_ALNUM).Cnt < 8 And nxTyp <> TYP_KANJI Then
+        'ALNUMが8文字未満で、次の文字が漢字以外の場合、byteとして出力予定
         ecx(TYP_ALNUM).Cnt = 0
         Return
     End If
@@ -521,7 +603,7 @@ End Sub
 ''' @param pText   / I / 変換対象文字列
 ''' @param eb      / I / エンコードブロック情報
 ''' @param qrParam / I / QRパラメタ
-Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrParam As tParams)
+Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrParam As tQRParam)
     Dim txt$, idx%, ln%, b&, utfCd&, ttlSiz&, ttlBit&
     txt = ""
     ttlSiz = 0
@@ -563,7 +645,7 @@ End Sub
 ''' @param pECL    / I / エラー補正レベル
 ''' @param eb      / I / エンコードブロック情報
 ''' @param qrParam / O / QRパラメタ
-Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem, ByRef qrParam As tParams)
+Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem, ByRef qrParam As tQRParam)
     Dim Siz As Integer
     Dim ttlByt As Long
     Dim idx As Integer
@@ -634,10 +716,9 @@ Private Sub QR_search_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As 
 
     Ver = 0
 
-    'size of (end of chain) is 4bits
-    reqSiz(0) = 4
-    reqSiz(1) = 4
-    reqSiz(2) = 4
+    reqSiz(0) = 0
+    reqSiz(1) = 0
+    reqSiz(2) = 0
     For idx = LBound(eb) To UBound(eb): With eb(idx)
         reqSiz(0) = reqSiz(0) + QR_getBitSize(.Typ, .Cnt, 1)
         reqSiz(1) = reqSiz(1) + QR_getBitSize(.Typ, .Cnt, 10)
@@ -734,14 +815,15 @@ End Function
 ''' @param eb      / I / エンコードブロック情報
 ''' @param encArr  / O / 出力バイト配列
 ''' @return 成功した場合、Trueを、失敗した場合はFalseを返却する
-Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef eb() As tEbItem, ByRef encArr() As Byte) As Boolean
+Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParam, ByRef eb() As tEbItem, ByRef encArr() As Byte) As Boolean
     Dim encIdx As Integer
     Dim r As Integer
     Dim c As Integer
     Dim bits As Long
-    Dim bIdx As Long, eIdx As Long, idx As Long
+    Dim bIdx As Long, eIdx As Long
     Dim k As Long
     Dim m As Long
+    Dim maxSiz As Long
 
     ReDim encArr(qrParam.ttlByt + 2)
 
@@ -851,26 +933,31 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tParams, ByRef 
 #End If
     End With: Next eIdx
 
-    'end of chain
-    BB_putBits encArr, encIdx, 0, 4
-
-    'round to byte
-    If (encIdx Mod 8) <> 0 Then
-        BB_putBits encArr, encIdx, 0, 8 - (encIdx Mod 8)
-    End If
-
-    'padding
-    idx = (qrParam.ttlByt - qrParam.ccSiz * qrParam.ccBlks) * 8
-    If encIdx > idx Then
+    maxSiz = (qrParam.ttlByt - qrParam.ccSiz * qrParam.ccBlks) * 8
+    If encIdx > maxSiz Then
         outErr "QR_encd : encode length error"
 
         Exit Function
-    End If
 
-    'padding 0xEC, 0x11, 0xEC, 0x11...
-    Do While encIdx < idx
-        BB_putBits encArr, encIdx, &HEC11, 16
-    Loop
+    ElseIf encIdx < maxSiz Then
+        'end of chain
+        If encIdx + 4 <= maxSiz Then
+            BB_putBits encArr, encIdx, 0, 4
+
+        Else
+            BB_putBits encArr, encIdx, 0, maxSiz - encIdx
+        End If
+
+        'round to byte
+        If (encIdx Mod 8) <> 0 Then
+            BB_putBits encArr, encIdx, 0, 8 - (encIdx Mod 8)
+        End If
+
+        'padding 0xEC, 0x11, 0xEC, 0x11...
+        Do While encIdx < maxSiz
+            BB_putBits encArr, encIdx, &HEC11, 16
+        Loop
+    End If
 
     QR_encd = True
 End Function
@@ -979,7 +1066,7 @@ End Function
 '''QR配列の初期設定
 ''' @param qrParam / I / QRパラメタ
 ''' @param qrArr   / O / QR配列
-Private Sub QR_initArr(ByRef qrParam As tParams, ByRef qrArr() As Byte)
+Private Sub QR_initArr(ByRef qrParam As tQRParam, ByRef qrArr() As Byte)
     Dim ch As Integer
     Dim Siz As Integer
     Dim r As Integer, c As Integer
@@ -1240,7 +1327,7 @@ qrf_NextByte:
         If wb > vsb Then
             wa = wa + wb - vsb
         End If
-#If DEBUG_ > 1 Then
+#If DEBUG_ > 2 Then
         If vb >= vDnLen Then Debug.Print "D:" & (1 + vds * wb + wa)
 #End If
 
@@ -1250,7 +1337,7 @@ qrf_NextByte:
         wa = vb - pDatLen
         wb = wa Mod pBlkSiz
         wa = Int(wa / pBlkSiz)
-#If DEBUG_ > 1 Then
+#If DEBUG_ > 2 Then
         Debug.Print "E:" & (1 + pDatLen + ves * wb + wa)
 #End If
         w = encArr(1 + pDatLen + ves * wb + wa)
@@ -1264,13 +1351,20 @@ End Sub
 ''' @param qrParam / I / QRパラメタ
 ''' @param pECL    / I / エラー補正レベル
 ''' @param qrArr   / IO / QR配列
-Private Sub QR_maskArr(ByRef qrParam As tParams, ByVal pECL As eErrorCorrectionLevel, ByRef qrArr() As Byte)
+Private Sub QR_maskArr(ByRef qrParam As tQRParam, ByVal pECL As eErrorCorrectionLevel, ByVal pMaskPtn As eMaskType, ByRef qrArr() As Byte)
     Dim Siz As Integer
     Dim mask As Integer, idx As Integer
     Dim score As Long, minScore As Long
 
     Siz = qrParam.Siz
 
+    If pMaskPtn <> MSK_AUTO Then
+        QR_maskArr_addMM qrArr, pECL, Siz, pMaskPtn
+        QR_xorMask qrArr, Siz, pMaskPtn, True
+
+        Exit Sub
+    End If
+        
     minScore = -1
     For idx = 0 To 7
         QR_maskArr_addMM qrArr, pECL, Siz, idx
@@ -1300,8 +1394,8 @@ Private Sub QR_maskArr_addMM(ByRef qrArr() As Byte, ByVal pECL As eErrorCorrecti
     k = pECL * 8 + mask
     ' poly: 101 0011 0111
     QR_bch_calc k, &H537
-#If DEBUG_ > 0 Then
-    Debug.Print "mask :" & Hex(k, 3) & " " & Hex(k Xor &H5412, 3)
+#If DEBUG_ > 1 Then
+    Debug.Print "mask :" & Hex(k) & " " & Hex(k Xor &H5412)
 #End If
     k = k Xor &H5412
 
@@ -1650,7 +1744,7 @@ End Sub
 ''' @param qrParam / I / QRパラメタ
 ''' @param qrArr   / I / QR配列
 ''' @return QRコード表現文字列
-Private Function QR_makeAscMtrx(ByRef qrParam As tParams, ByRef qrArr() As Byte) As String
+Private Function QR_makeAscMtrx(ByRef qrParam As tQRParam, ByRef qrArr() As Byte) As String
     Dim ascMtrx As String
     Dim rIdx As Integer, cIdx As Integer, bIdx As Integer
     Dim ch As Integer, idx As Long

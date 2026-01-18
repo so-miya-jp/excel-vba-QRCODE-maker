@@ -97,7 +97,7 @@ Private Type tEbItem
 End Type
 
 'QRパラメータ
-Private Type tQRParam
+Private Type tQRParams
     Ver As Integer      'バージョン
     Siz As Integer      'サイズ
     ccSiz As Integer    'CCサイズ
@@ -116,7 +116,6 @@ Private Sub Init()
     IsMs = (VarType(Asc("A")) = vbInteger)
     ErrTxt = ""
 
-    ' mode indicator (1=num,2=AlNum,4=Byte,8=kanji,ECI=7)
     '      mode: Byte Alhanum  Numeric  Kanji
     ' ver 1..9 :  8      9       10       8
     '   10..26 : 16     11       12      10
@@ -241,13 +240,14 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
     Dim encoded1() As Byte  ' byte mode (ASCII) all max 3200 bytes
     Dim eb() As tEbItem
     Dim qrArr() As Byte ' final matrix
-    Dim qrParam As tQRParam
+    Dim qrParam As tQRParams
 
     If pText = "" Then
         outErr "QR_gen : no data"
         Exit Function
     End If
 
+    'check option error
     Select Case pECL
     Case ECL_L, ECL_M, ECL_Q, ECL_H
         'nop
@@ -264,7 +264,7 @@ Private Function QR_gen(ByVal pText As String, ByVal pECL As eErrorCorrectionLev
         Exit Function
     End Select
 
-    If (pMode And MOD_BYTE_ONLY) <> MOD_BYTE_ONLY Then
+    If (pMode And MOD_BYTE) <> MOD_BYTE Then
         outErr "QR_gen : encode bit pattern error : " & pMode
         Exit Function
     End If
@@ -603,7 +603,7 @@ End Sub
 ''' @param pText   / I / 変換対象文字列
 ''' @param eb      / I / エンコードブロック情報
 ''' @param qrParam / I / QRパラメタ
-Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrParam As tQRParam)
+Private Sub QR_debugEb(ByVal pText As String, ByRef eb() As tEbItem, ByRef qrParam As tQRParams)
     Dim txt$, idx%, ln%, b&, utfCd&, ttlSiz&, ttlBit&
     txt = ""
     ttlSiz = 0
@@ -645,7 +645,7 @@ End Sub
 ''' @param pECL    / I / エラー補正レベル
 ''' @param eb      / I / エンコードブロック情報
 ''' @param qrParam / O / QRパラメタ
-Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem, ByRef qrParam As tQRParam)
+Private Sub QR_params(ByVal pECL As eErrorCorrectionLevel, ByRef eb() As tEbItem, ByRef qrParam As tQRParams)
     Dim Siz As Integer
     Dim ttlByt As Long
     Dim idx As Integer
@@ -815,12 +815,13 @@ End Function
 ''' @param eb      / I / エンコードブロック情報
 ''' @param encArr  / O / 出力バイト配列
 ''' @return 成功した場合、Trueを、失敗した場合はFalseを返却する
-Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParam, ByRef eb() As tEbItem, ByRef encArr() As Byte) As Boolean
+Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParams, ByRef eb() As tEbItem, ByRef encArr() As Byte) As Boolean
     Dim encIdx As Integer
     Dim r As Integer
     Dim c As Integer
     Dim bits As Long
     Dim bIdx As Long, eIdx As Long
+    Dim ch As String
     Dim k As Long
     Dim m As Long
     Dim maxSiz As Long
@@ -830,6 +831,7 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParam, ByRef
     QR_encd = False
     encIdx = 0
     For eIdx = LBound(eb) To UBound(eb): With eb(eIdx)
+        ' mode indicator (1=num,2=AlNum,4=Byte,8=kanji,ECI=7)
         Select Case .Typ
         Case TYP_NUM:   k = 1
         Case TYP_ALNUM: k = 2
@@ -846,13 +848,14 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParam, ByRef
         m = .Pos
         r = 0
         Do While bIdx < .Cnt
-            k = AscL(Mid(pText, m, 1))
+            ch = Mid(pText, m, 1)
+            k = AscL(ch)
             m = m + 1
 
             Select Case .Typ
             Case TYP_NUM
                 r = (r * 10) + ((k - &H30) Mod 10)
-                If bIdx Mod 3 = 2 Then
+                If (bIdx Mod 3) = 2 Then
                     BB_putBits encArr, encIdx, r, 10
                     r = 0
                 End If
@@ -860,14 +863,14 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParam, ByRef
 
             Case TYP_ALNUM
                 r = (r * 45) + ((InStr(QR_ALNUM, Chr(k)) - 1) Mod 45)
-                If bIdx Mod 2 = 1 Then
+                If (bIdx Mod 2) = 1 Then
                     BB_putBits encArr, encIdx, r, 11
                     r = 0
                 End If
                 bIdx = bIdx + 1
 
             Case TYP_KANJI
-                bits = QR_AscK(Mid(pText, m - 1, 1))
+                bits = QR_AscK(ch)
                 BB_putBits encArr, encIdx, bits, 13
                 bIdx = bIdx + 1
 
@@ -939,14 +942,13 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParam, ByRef
 
         Exit Function
 
+    ElseIf encIdx + 4 > maxSiz Then
+        'end of chain
+        BB_putBits encArr, encIdx, 0, maxSiz - encIdx
+
     ElseIf encIdx < maxSiz Then
         'end of chain
-        If encIdx + 4 <= maxSiz Then
-            BB_putBits encArr, encIdx, 0, 4
-
-        Else
-            BB_putBits encArr, encIdx, 0, maxSiz - encIdx
-        End If
+        BB_putBits encArr, encIdx, 0, 4
 
         'round to byte
         If (encIdx Mod 8) <> 0 Then
@@ -1066,7 +1068,7 @@ End Function
 '''QR配列の初期設定
 ''' @param qrParam / I / QRパラメタ
 ''' @param qrArr   / O / QR配列
-Private Sub QR_initArr(ByRef qrParam As tQRParam, ByRef qrArr() As Byte)
+Private Sub QR_initArr(ByRef qrParam As tQRParams, ByRef qrArr() As Byte)
     Dim ch As Integer
     Dim Siz As Integer
     Dim r As Integer, c As Integer
@@ -1351,7 +1353,7 @@ End Sub
 ''' @param qrParam / I / QRパラメタ
 ''' @param pECL    / I / エラー補正レベル
 ''' @param qrArr   / IO / QR配列
-Private Sub QR_maskArr(ByRef qrParam As tQRParam, ByVal pECL As eErrorCorrectionLevel, ByVal pMaskPtn As eMaskType, ByRef qrArr() As Byte)
+Private Sub QR_maskArr(ByRef qrParam As tQRParams, ByVal pECL As eErrorCorrectionLevel, ByVal pMaskPtn As eMaskType, ByRef qrArr() As Byte)
     Dim Siz As Integer
     Dim mask As Integer, idx As Integer
     Dim score As Long, minScore As Long
@@ -1744,7 +1746,7 @@ End Sub
 ''' @param qrParam / I / QRパラメタ
 ''' @param qrArr   / I / QR配列
 ''' @return QRコード表現文字列
-Private Function QR_makeAscMtrx(ByRef qrParam As tQRParam, ByRef qrArr() As Byte) As String
+Private Function QR_makeAscMtrx(ByRef qrParam As tQRParams, ByRef qrArr() As Byte) As String
     Dim ascMtrx As String
     Dim rIdx As Integer, cIdx As Integer, bIdx As Integer
     Dim ch As Integer, idx As Long

@@ -37,10 +37,24 @@ Public Sub LoadSetting(Optional ByVal Secreted As Boolean = False)
 
     Set sh = SettingSheet
     Set Rng = sh.ListObjects("設定表").DataBodyRange
-    With Rng
-        .Interior.ColorIndex = xlNone
-        .ClearComments
-    End With
+
+    If sh.Comments.Count > 0 Then
+        If Not Intersect(sh.Cells.SpecialCells(xlCellTypeComments), Rng) Is Nothing Then
+            'コメントが存在する場合、コメントを削除
+            Rng.ClearComments
+#If DEBUG_ > 0 Then
+            Debug.Print "LoadSetting ClearComments"
+#End If
+        End If
+    End If
+
+    If Rng.Interior.ColorIndex <> xlNone Then
+        '背景色の変更をなしにする。
+        Rng.Interior.ColorIndex = xlNone
+#If DEBUG_ > 0 Then
+        Debug.Print "LoadSetting ColorIndex = xlNone"
+#End If
+    End If
     ar = Rng
 
     msgChunk = ""

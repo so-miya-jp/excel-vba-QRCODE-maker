@@ -5,32 +5,45 @@ END
 Attribute VB_Name = "MySetting"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
-Attribute VB_PredeclaredId = False
+Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Explicit
 
 '---- メンバー変数
+Private DirtyFlag_ As Boolean
 Private MaskPattern_ As eMaskType
 Private ModeSet_ As eModeBit
 Private ImageFolder_ As String
-Private ErrorMessage_ As String
 '----
 
 '''クラス初期処理
 Private Sub Class_Initialize()
-    LoadSetting
+    DirtyFlag_ = True
+    LoadSetting True
 End Sub
 
-Public Sub LoadSetting()
+'''設定の読み込み
+''' @param Secreted / I / Trueの場合、エラー時にメッセージを非表示とする(省略時はFalse)
+Public Sub LoadSetting(Optional ByVal Secreted As Boolean = False)
     Dim sh As Worksheet
+    Dim Rng As Range
     Dim ar() As Variant
+    Dim msg As String
+    Dim msgChunk As String
     Dim idx As Long
     Dim sKey As String, sValue As String, lValue As Long
 
-    Set sh = SettingSheet
-    ar = sh.ListObjects("設定表").DataBodyRange
+    If Not DirtyFlag_ Then Exit Sub
 
-    ErrorMessage_ = ""
+    Set sh = SettingSheet
+    Set Rng = sh.ListObjects("設定表").DataBodyRange
+    With Rng
+        .Interior.ColorIndex = xlNone
+        .ClearComments
+    End With
+    ar = Rng
+
+    msgChunk = ""
 
     For idx = LBound(ar, 1) To UBound(ar, 1)
         sKey = UCase(Trim(ar(idx, 1)))
@@ -49,7 +62,9 @@ Public Sub LoadSetting()
                 MaskPattern_ = lValue
 
             Else
-                OutputError sKey, idx, "想定外の値"
+                msg = "想定外の値"
+                GoSub ErrorSub
+
                 MaskPattern_ = MSK_AUTO
             End If
 
@@ -58,7 +73,9 @@ Public Sub LoadSetting()
                 ModeSet_ = lValue
 
             Else
-                OutputError sKey, idx, "想定外の値"
+                msg = "想定外の値"
+                GoSub ErrorSub
+
                 ModeSet_ = MOD_ALL
             End If
 
@@ -70,49 +87,54 @@ Public Sub LoadSetting()
                 ImageFolder_ = sValue
 
             Else
-                OutputError sKey, idx, "ディレクトリが存在しません。"
+                msg = "ディレクトリが存在しません"
+                GoSub ErrorSub
+
                 ImageFolder_ = ""
             End If
         End Select
     Next idx
 
+    If Not Secreted And msgChunk <> "" Then
+        MsgBox Mid(msgChunk, 2)
+    End If
+
+    DirtyFlag_ = False
+
+    Exit Sub
+
+ErrorSub:
+    msgChunk = msgChunk & vbLf & sKey & ":" & msg & "(" & sValue & ")"
+    With Rng.Cells(idx, 2)
+        .AddComment msg
+        .Interior.Color = rgbPink
+    End With
+
+    Return
 End Sub
 
-'''エラー出力
-''' @param ID      / I / ID
-''' @param Line    / I / 行番号
-''' @param Message / I / メッセージ
-Private Sub OutputError(ByVal ID As String, ByVal Line As Long, ByVal Message As String)
-    If ErrorMessage_ <> "" Then ErrorMessage_ = ErrorMessage_ & vbLf
-    ErrorMessage_ = ErrorMessage_ & ID & "：" & Message
+'''設定変更時に呼び出される。
+Public Sub Update()
+    DirtyFlag_ = True
 End Sub
-
-'''エラー有無プロパティ
-''' @return エラー有無
-Public Property Get IsError() As Boolean
-    IsError = ErrorMessage_ <> ""
-End Property
-
-'''エラーメッセージプロパティ
-''' @return エラーメッセージ
-Public Property Get ErrorMessage() As String
-    ErrorMessage = ErrorMessage_
-End Property
 
 '''マスクパターンプロパティ
 ''' @return マスクパターン
 Public Property Get MaskPattern() As eMaskType
+    LoadSetting
     MaskPattern = MaskPattern_
 End Property
 
 '''モードセットプロパティ
 ''' @return モードセット
 Public Property Get ModeSet() As eModeBit
+    LoadSetting
     ModeSet = ModeSet_
 End Property
 
 '''画像フォルダプロパティ
 ''' @return 画像フォルダ
 Public Property Get ImageFolder() As String
+    LoadSetting
     ImageFolder = ImageFolder_
 End Property

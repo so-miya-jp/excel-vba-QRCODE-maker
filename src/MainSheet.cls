@@ -28,11 +28,6 @@ Sub OutputQRCode_Click()
     Dim shNameChunk As String
     Dim info As String
     Dim ecl As eErrorCorrectionLevel
-    Dim setting As New MySetting
-
-    If setting.IsError Then
-        MsgBox "設定にエラーがあります。" & vbLf & setting.ErrorMessage
-    End If
 
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
     Set pSh = MainSheet
@@ -100,7 +95,7 @@ Sub OutputQRCode_Click()
             .Range(COL_ECL).Value = "L"
         End Select
 
-        WriteQRCode tSh.Cells(outRow, 1), info, targetTxt, ecl, setting.MaskPattern, setting.ModeSet
+        WriteQRCode tSh.Cells(outRow, 1), info, targetTxt, ecl, MySetting.MaskPattern, MySetting.ModeSet
         .Range(COL_RESULT).Value = info
         If LCase(info) Like "ver.*" Then
             .Range(COL_FLAG).Value = "済"
@@ -189,11 +184,6 @@ Sub SplitFile_Click()
     Dim msgRet As VbMsgBoxResult
     Dim idx As Long, srcRow As Long, lstRow As Long
     Dim fmt As String
-    Dim setting As New MySetting
-
-    If setting.IsError Then
-        MsgBox "設定にエラーがあります。" & vbLf & setting.ErrorMessage
-    End If
 
     Set SrcObj = MainSheet.ListObjects("分割対象")
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
@@ -262,7 +252,7 @@ Sub SplitFile_Click()
         End Select
 
         Erase Result
-        If Not SplitFile(Result, Path, charSet, ecl, setting.ModeSet) Then
+        If Not SplitFile(Result, Path, charSet, ecl, MySetting.ModeSet) Then
             MsgBox "ファイル分割に失敗しました。" & vbLf & Path
             GoTo Continue_For
         End If

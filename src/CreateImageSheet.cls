@@ -19,6 +19,7 @@ Sub CreateQRCodeImage_Click()
     Dim elementRng As Range
     Dim bgColor As Long
     Dim Result As String
+    Dim setting As New MySetting
 
     Set sh = CreateImageSheet
     ar = sh.Range("C2:C6").Value
@@ -57,7 +58,7 @@ Sub CreateQRCodeImage_Click()
     End If
 
     'QRコード画像の生成
-    DrawQRCodeImage sh.Range("C10"), Result, txtFilePath, elementRng, bgColor, txtTarget, ecl
+    DrawQRCodeImage sh.Range("C10"), Result, txtFilePath, elementRng, bgColor, txtTarget, ecl, setting.MaskPattern, setting.ModeSet
     sh.Range("C9").Value = Result
 End Sub
 
@@ -112,6 +113,11 @@ Sub LoadImage_Click()
     Dim data() As Long
     Dim Rng As Range
     Dim r As Long, c As Long
+    Dim setting As New MySetting
+
+    If setting.IsError Then
+        MsgBox "設定にエラーがあります。" & vbLf & setting.ErrorMessage
+    End If
 
     Set sh = CreateImageSheet
 
@@ -136,7 +142,12 @@ Sub LoadImage_Click()
         .Filters.Add "圧縮Windows拡張メタファイル", "*.emz"
         .Filters.Add "圧縮Windowsメタファイル", "*.wmz"
         .AllowMultiSelect = False
-        .InitialFileName = Application.ThisWorkbook.Path
+        If setting.ImageFolder = "" Then
+            .InitialFileName = Application.ThisWorkbook.Path
+
+        Else
+            .InitialFileName = setting.ImageFolder
+        End If
 
         If .Show Then
             Path = .SelectedItems(1)

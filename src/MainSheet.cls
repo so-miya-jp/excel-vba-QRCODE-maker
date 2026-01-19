@@ -28,6 +28,11 @@ Sub OutputQRCode_Click()
     Dim shNameChunk As String
     Dim info As String
     Dim ecl As eErrorCorrectionLevel
+    Dim setting As New MySetting
+
+    If setting.IsError Then
+        MsgBox "設定にエラーがあります。" & vbLf & setting.ErrorMessage
+    End If
 
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
     Set pSh = MainSheet
@@ -49,6 +54,10 @@ Sub OutputQRCode_Click()
             On Error Resume Next
             Set tSh = Application.ThisWorkbook.Sheets(shName)
             On Error GoTo 0
+            If tSh Is MainSheet Or tSh Is CreateImageSheet Or tSh Is SettingSheet Then
+                'ツールで使用しているシートだった場合は除外する。
+                Set tSh = Nothing
+            End If
         End If
 
         If tSh Is Nothing Then
@@ -91,7 +100,7 @@ Sub OutputQRCode_Click()
             .Range(COL_ECL).Value = "L"
         End Select
 
-        WriteQRCode tSh.Cells(outRow, 1), info, targetTxt, ecl
+        WriteQRCode tSh.Cells(outRow, 1), info, targetTxt, ecl, setting.MaskPattern, setting.ModeSet
         .Range(COL_RESULT).Value = info
         If LCase(info) Like "ver.*" Then
             .Range(COL_FLAG).Value = "済"
@@ -180,6 +189,11 @@ Sub SplitFile_Click()
     Dim msgRet As VbMsgBoxResult
     Dim idx As Long, srcRow As Long, lstRow As Long
     Dim fmt As String
+    Dim setting As New MySetting
+
+    If setting.IsError Then
+        MsgBox "設定にエラーがあります。" & vbLf & setting.ErrorMessage
+    End If
 
     Set SrcObj = MainSheet.ListObjects("分割対象")
     Set ListObj = MainSheet.ListObjects("変換対象一覧")
@@ -248,7 +262,7 @@ Sub SplitFile_Click()
         End Select
 
         Erase Result
-        If Not SplitFile(Result, Path, charSet, ecl) Then
+        If Not SplitFile(Result, Path, charSet, ecl, setting.ModeSet) Then
             MsgBox "ファイル分割に失敗しました。" & vbLf & Path
             GoTo Continue_For
         End If
@@ -312,7 +326,14 @@ Sub Clear_Click()
                 Set sh = Nothing
                 Set sh = Application.ThisWorkbook.Sheets(Rng.Value)
                 On Error GoTo 0
-                If Not sh Is Nothing Then sh.Delete
+
+                If sh Is Nothing Then GoTo Continue_For_Rng
+                If sh Is MainSheet Then GoTo Continue_For_Rng
+                If sh Is CreateImageSheet Then GoTo Continue_For_Rng
+                If sh Is SettingSheet Then GoTo Continue_For_Rng
+
+                sh.Delete
+Continue_For_Rng:
             Next Rng
             Application.DisplayAlerts = True
 
@@ -326,4 +347,3 @@ Sub Clear_Click()
         TargetRng.ClearContents
     End If
 End Sub
-

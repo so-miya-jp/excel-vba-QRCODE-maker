@@ -2,11 +2,17 @@ Attribute VB_Name = "MainModule"
 Option Explicit
 
 '''変換対象文字列をQRコードに変換し、指定Rangeに書き込む。
-''' @param pRng    / IO / QRコード出力先
-''' @param pInfo   / O / エラー情報またはバージョン情報
-''' @param pTarget / I / 変換対象文字列
-''' @param pECL    / I / エラー補正レベル(省略時はECL_L)
-Public Sub WriteQRCode(ByRef pRng As Range, ByRef pInfo As String, ByVal pTarget As String, Optional ByVal pECL As eErrorCorrectionLevel = ECL_L)
+''' @param pRng     / IO / QRコード出力先
+''' @param pInfo    / O / エラー情報またはバージョン情報
+''' @param pTarget  / I / 変換対象文字列
+''' @param pECL     / I / エラー補正レベル(省略時はECL_L)
+''' @param pMaskPtn / I / マスクパターン(省略時はMSK_AUTO)
+''' @param pModeSet / I / モードセット(省略時はMOD_ALL)
+Public Sub WriteQRCode(ByRef pRng As Range, ByRef pInfo As String, ByVal pTarget As String _
+        , Optional ByVal pECL As eErrorCorrectionLevel = ECL_L _
+        , Optional ByVal pMaskPtn As eMaskType = MSK_AUTO _
+        , Optional ByVal pModeSet As eModeBit = MOD_ALL _
+        )
     Dim Subject As String
     Dim ar() As Variant
 
@@ -21,7 +27,7 @@ Public Sub WriteQRCode(ByRef pRng As Range, ByRef pInfo As String, ByVal pTarget
     pRng.Value = Subject
     pRng.RowHeight = 19.5
 
-    If GetQRCode(ar, pInfo, pTarget, pECL) Then
+    If GetQRCode(ar, pInfo, pTarget, pECL, pMaskPtn, pModeSet) Then
         OutputRange pRng.Offset(1, 0), ar
 
     Else
@@ -60,14 +66,19 @@ Private Sub OutputRange(ByRef pRng As Range, ByRef ar() As Variant)
 End Sub
 
 '''指定したファイルを指定文字コードで読み込み、QRコードで表現できるサイズで分割する。
-''' @param Result  / O / 分割結果配列
-''' @param Path    / I / 読み込み対象のファイルパス
-''' @param charSet / I / 指定文字コード(省略時は"UTF-8")
-'''                      "binary"で始まる文字列が指定された場合、ファイルパスの指す先を
-'''                      バイナリファイルとして読み込んでBase64化したものを対象とする｡
-''' @param pECL    / I / エラー補正レベル(省略時はECL_L)
+''' @param Result   / O / 分割結果配列
+''' @param Path     / I / 読み込み対象のファイルパス
+''' @param charSet  / I / 指定文字コード(省略時は"UTF-8")
+'''                       "binary"で始まる文字列が指定された場合、ファイルパスの指す先を
+'''                       バイナリファイルとして読み込んでBase64化したものを対象とする｡
+''' @param pECL     / I / エラー補正レベル(省略時はECL_L)
+''' @param pModeSet / I / モードセット(省略時はMOD_ALL)
 ''' @return 成功した場合はTrue
-Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Optional ByVal charSet As String = "UTF-8", Optional ByVal pECL As eErrorCorrectionLevel = ECL_L) As Boolean
+Public Function SplitFile(ByRef Result() As String, ByVal Path As String _
+        , Optional ByVal charSet As String = "UTF-8" _
+        , Optional ByVal pECL As eErrorCorrectionLevel = ECL_L _
+        , Optional ByVal pModeSet As eModeBit = MOD_ALL _
+        ) As Boolean
     Dim buf() As Byte
     Dim Lines() As String
     Dim curText As String, oldText As String
@@ -95,7 +106,7 @@ Public Function SplitFile(ByRef Result() As String, ByVal Path As String, Option
 
     For idx = LBound(Lines) To UBound(Lines)
         curText = curText & Lines(idx) & vbLf
-        v = CheckQRCode(curText, pECL)
+        v = CheckQRCode(curText, pECL, pModeSet)
         If v = 0 Then
             If oldText = "" Then Exit Function
             AddArrayText Result, oldText
@@ -118,7 +129,13 @@ End Function
 ''' @param bgColor     / I / 背景色
 ''' @param pTarget     / I / 変換対象文字列
 ''' @param pECL        / I / エラー補正レベル(省略時はECL_L)
-Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal FilePath As String, ByRef pElementRng As Range, ByVal bgColor As Long, ByVal pTarget As String, Optional ByVal pECL As eErrorCorrectionLevel = ECL_L)
+''' @param pMaskPtn    / I / マスクパターン(省略時はMSK_AUTO)
+''' @param pModeSet    / I / モードセット(省略時はMOD_ALL)
+Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal FilePath As String, ByRef pElementRng As Range, ByVal bgColor As Long, ByVal pTarget As String _
+        , Optional ByVal pECL As eErrorCorrectionLevel = ECL_L _
+        , Optional ByVal pMaskPtn As eMaskType = MSK_AUTO _
+        , Optional ByVal pModeSet As eModeBit = MOD_ALL _
+        )
     Dim ar() As Variant
     Dim isLink As MsoTriState
     Dim eImg() As Variant
@@ -128,7 +145,7 @@ Public Sub DrawQRCodeImage(ByRef pRng As Range, ByRef pInfo As String, ByVal Fil
     Dim sh As Worksheet
 
     'QRコードの生成
-    If Not GetQRCode(ar, pInfo, pTarget, pECL) Then
+    If Not GetQRCode(ar, pInfo, pTarget, pECL, pMaskPtn, pModeSet) Then
         Exit Sub
     End If
 

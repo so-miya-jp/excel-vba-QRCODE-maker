@@ -463,44 +463,27 @@ FIN_NUMERIC:
             Return
         End If
 
-        If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And nxTyp = TYP_UNKNOWN Then
+        If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And (nxTyp = TYP_UNKNOWN Or nxTyp = TYP_KANJI) Then
             'ALNUMの前後に未出力のbyteが存在しない場合
 
         ElseIf ecxcmp(ecx, TYP_ALNUM, TYP_NUM) > 0 Then
             '数字の前に数字以外の未出力のALNUMが存在する
             If ecx(TYP_ALNUM).Cnt < 8 Then
                 '未出力のALNUMが8桁未満
-                If nxTyp = TYP_ALNUM Then
-                    '次の文字がALNUMなのでALNUMとして出力予定
-                    ecx(TYP_NUM).Cnt = 0
-
-                Else
-                    '次の文字がALNUM以外なのでbyteとして出力予定
-                    ecx(TYP_NUM).Cnt = 0
-                    ecx(TYP_ALNUM).Cnt = 0
-                End If
-
-                Return
-            End If
-
-        ElseIf ecx(TYP_NUM).Cnt < 5 And nxTyp <> TYP_KANJI Then
-            '数字の前後がALNUM以外のbyteで、数字の後が漢字ではなく、数字が5桁未満の場合、byteとして出力予定
-            ecx(TYP_NUM).Cnt = 0
-            ecx(TYP_ALNUM).Cnt = 0
-            Return
-        End If
-
-    ElseIf ecx(TYP_NUM).Cnt < 9 Then
-        '数字が9桁未満
-        If ecxcmp(ecx, TYP_ALNUM, TYP_NUM) > 0 Then
-            If nxTyp = TYP_ALNUM Then
-                '数字の前後がALNUMなのでALNUMとして出力予定
+                '次の文字がALNUM以外なのでbyteとして出力予定
                 ecx(TYP_NUM).Cnt = 0
+                ecx(TYP_ALNUM).Cnt = 0
                 Return
             End If
 
         ElseIf ecxcmp(ecx, TYP_BYTE, TYP_NUM) > 0 And nxTyp = TYP_BYTE Then
             '数字の前にALNUMがなく、前後がbyteなのでbyteとして出力予定
+            ecx(TYP_NUM).Cnt = 0
+            ecx(TYP_ALNUM).Cnt = 0
+            Return
+
+        ElseIf ecx(TYP_NUM).Cnt < 5 And nxTyp <> TYP_KANJI Then
+            '数字の前後がALNUM以外のbyteで、数字の後が漢字ではなく、数字が5桁未満の場合、byteとして出力予定
             ecx(TYP_NUM).Cnt = 0
             ecx(TYP_ALNUM).Cnt = 0
             Return
@@ -541,7 +524,7 @@ FIN_NUMERIC:
     Return
 
 FIN_ALPH_NUMERIC:
-    If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And nxTyp = TYP_UNKNOWN Then
+    If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And (nxTyp = TYP_UNKNOWN Or nxTyp = TYP_KANJI) Then
         'ALNUMの前後に未出力のbyteが存在しない場合
 
     ElseIf ecx(TYP_ALNUM).Cnt < 8 And nxTyp <> TYP_KANJI Then

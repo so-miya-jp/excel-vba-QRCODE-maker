@@ -270,9 +270,9 @@ End Sub
 
 '''画像の読み込み。BMPファイルならば直接読み込みます。
 '''BMPファイル以外ならばBMPファイルに変換してから読み込みます。
-''' @param sh    / IO / 作業に使用するワークシート(一時的にオブジェクトを追加しますが、最終的には削除します。)
 ''' @param Path  / I / 入力ファイルパス
 ''' @param pData / O / 読み込んだ24bitカラーマップ
+''' @param sh    / IO / 作業に使用するワークシート(一時的にオブジェクトを追加しますが、最終的には削除します。)(省略時はActiveSheetを使用)
 ''' @return 成功した場合はTrue
 Public Function ImportImage(ByVal Path As String, ByRef pData() As Long, Optional ByRef sh As Worksheet = Nothing) As Boolean
     Dim errCd As eErrorCode

@@ -421,10 +421,40 @@ Private Sub QR_anlyz(ByVal pText As String, ByVal pMode As eModeBit, ByRef eb() 
 
     Exit Sub
 
+    '- ALNUMと数字が隣接している場合、以下の条件ならばALNUMとして出力したほうがビット数が少ない
+    '  ALNUMの文字数が奇数の場合。
+    '    Ver.1～26では数字が8桁未満
+    '    Ver.27～40では数字が9桁未満
+    '  ALNUMの文字数が偶数の場合。
+    '    Ver.1～9では数字が7桁未満
+    '    Ver.10～26では数字が8桁未満
+    '    Ver.27～40では数字が9桁未満
+    '- 数字の前後がALNUMに挟まれている場合、以下の条件ならばALNUMとして出力したほうがビット数が少ない
+    '  ALNUMの文字数が奇数の場合。
+    '    Ver.1～9では数字が14桁未満
+    '    Ver.10～26では数字が17桁未満
+    '    Ver.27～40では数字が18桁未満
+    '  ALNUMの文字数が偶数の場合。
+    '    Ver.1～9では数字が14桁未満
+    '    Ver.10～26では数字が15桁未満
+    '    Ver.27～40では数字が17桁未満
+    '- byteと数字が隣接している場合、以下の条件ならばbyteとして出力したほうがビット数が少ない
+    '  Ver.1～26では数字が4桁未満
+    '  Ver.27～40では数字が5桁未満
+    '- 数字の前後がbyteに挟まれている場合、以下の条件ならばbyteとして出力したほうがビット数が少ない
+    '  Ver.1～26では数字が8桁未満
+    '  Ver.27～40では数字が9桁未満
+    '- byteとALNUMが隣接している場合、以下の条件ならばbyteとして出力したほうがビット数が少ない
+    '  Ver.1～9ではALNUMが6桁未満
+    '  Ver.10～26ではALNUMが7桁未満
+    '  Ver.27～40ではALNUMが8桁未満
+    '- ALNUMの前後がbyteに挟まれている場合、以下の条件ならばbyteとして出力したほうがビット数が少ない
+    '  Ver.1～9ではALNUMが10桁未満
+    '  Ver.10～26ではALNUMが14桁未満
+    '  Ver.27～40ではALNUMが16桁未満
+
+    '以降のロジックはVer.27以降を基準としている。ALNUMの文字数の奇数/偶数は使用しない。
 FIN_NUMERIC:
-    '- ALNUMと数字が隣接している場合、数字が8桁未満ならばALNUMとして出力したほうがビット数が少ない
-    '- byteと数字が隣接している場合、数字が4桁未満ならばbyteとして出力したほうがビット数が少ない
-    '- 数字と漢字はグループが異なる
     If ecx(TYP_NUM).Cnt < 9 Then
         '数字が9桁未満
         If nxTyp = TYP_ALNUM Then
@@ -439,9 +469,17 @@ FIN_NUMERIC:
         ElseIf ecxcmp(ecx, TYP_ALNUM, TYP_NUM) > 0 Then
             '数字の前に数字以外の未出力のALNUMが存在する
             If ecx(TYP_ALNUM).Cnt < 8 Then
-                '未出力のALNUMが8桁未満なのでbyteとして出力予定
-                ecx(TYP_NUM).Cnt = 0
-                ecx(TYP_ALNUM).Cnt = 0
+                '未出力のALNUMが8桁未満
+                If nxTyp = TYP_ALNUM Then
+                    '次の文字がALNUMなのでALNUMとして出力予定
+                    ecx(TYP_NUM).Cnt = 0
+
+                Else
+                    '次の文字がALNUM以外なのでbyteとして出力予定
+                    ecx(TYP_NUM).Cnt = 0
+                    ecx(TYP_ALNUM).Cnt = 0
+                End If
+
                 Return
             End If
 
@@ -449,6 +487,30 @@ FIN_NUMERIC:
             '数字の前後がALNUM以外のbyteで、数字の後が漢字ではなく、数字が5桁未満の場合、byteとして出力予定
             ecx(TYP_NUM).Cnt = 0
             ecx(TYP_ALNUM).Cnt = 0
+            Return
+        End If
+
+    ElseIf ecx(TYP_NUM).Cnt < 9 Then
+        '数字が9桁未満
+        If ecxcmp(ecx, TYP_ALNUM, TYP_NUM) > 0 Then
+            If nxTyp = TYP_ALNUM Then
+                '数字の前後がALNUMなのでALNUMとして出力予定
+                ecx(TYP_NUM).Cnt = 0
+                Return
+            End If
+
+        ElseIf ecxcmp(ecx, TYP_BYTE, TYP_NUM) > 0 And nxTyp = TYP_BYTE Then
+            '数字の前にALNUMがなく、前後がbyteなのでbyteとして出力予定
+            ecx(TYP_NUM).Cnt = 0
+            ecx(TYP_ALNUM).Cnt = 0
+            Return
+        End If
+
+    ElseIf ecx(TYP_NUM).Cnt < 18 Then
+        '数字が18桁未満
+        If ecxcmp(ecx, TYP_ALNUM, TYP_NUM) > 0 And nxTyp = TYP_ALNUM Then
+            '数字の前後がALNUMなのでALNUMとして出力予定
+            ecx(TYP_NUM).Cnt = 0
             Return
         End If
     End If
@@ -479,8 +541,6 @@ FIN_NUMERIC:
     Return
 
 FIN_ALPH_NUMERIC:
-    '- byteとALNUMが隣接している場合、ALNUMが8桁未満ならばbyteとして出力したほうがビット数が少ない
-    '- ALNUMと漢字はグループが異なる
     If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) = 0 And nxTyp = TYP_UNKNOWN Then
         'ALNUMの前後に未出力のbyteが存在しない場合
 
@@ -488,6 +548,13 @@ FIN_ALPH_NUMERIC:
         'ALNUMが8文字未満で、次の文字が漢字以外の場合、byteとして出力予定
         ecx(TYP_ALNUM).Cnt = 0
         Return
+    
+    ElseIf ecx(TYP_ALNUM).Cnt < 16 Then
+        If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) > 0 And nxTyp = TYP_BYTE Then
+            'ALNUMが16文字未満で、未出力のbyteが存在し、次の文字がbyteの場合、byteとして出力予定
+            ecx(TYP_ALNUM).Cnt = 0
+            Return
+        End If
     End If
 
     If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) > 0 Then
@@ -942,20 +1009,23 @@ Private Function QR_encd(ByVal pText As String, ByRef qrParam As tQRParams, ByRe
 
         Exit Function
 
-    ElseIf encIdx + 4 > maxSiz Then
-        'end of chain
+    ElseIf encIdx = maxSiz Then
+        'nop
+
+    ElseIf encIdx + 4 >= maxSiz Then
+        'end of chain ⇒ 終端パターン
         BB_putBits encArr, encIdx, 0, maxSiz - encIdx
 
-    ElseIf encIdx < maxSiz Then
-        'end of chain
+    Else
+        'end of chain ⇒ 終端パターン
         BB_putBits encArr, encIdx, 0, 4
 
-        'round to byte
+        'round to byte ⇒ 埋め草ビット
         If (encIdx Mod 8) <> 0 Then
             BB_putBits encArr, encIdx, 0, 8 - (encIdx Mod 8)
         End If
 
-        'padding 0xEC, 0x11, 0xEC, 0x11...
+        'padding 0xEC, 0x11, 0xEC, 0x11... ⇒ 埋め草ワード
         Do While encIdx < maxSiz
             BB_putBits encArr, encIdx, &HEC11, 16
         Loop
@@ -980,7 +1050,7 @@ Private Sub QR_rs(ByVal pPoly As Integer, ByRef encArr() As Byte, ByVal pSize As
     Dim poly(512) As Byte
     Dim v_ply() As Byte
 
-    'generate read solomon expTable and logTable
+    'generate read solomon expTable and logTable ⇒ リード・ソロモン用のexpTableとlogTableを生成する。
     ' QR uses GF256(0x11d) // 0x11d = 285 = x^8 + x^4 + x^3 + x^2 + 1
     v_x = 1
     For v_y = 0 To 255
@@ -997,10 +1067,10 @@ Private Sub QR_rs(ByVal pPoly As Integer, ByRef encArr() As Byte, ByVal pSize As
     Next v_x
 
     v_b2c = pBlocks
-    v_bs = Int(pSize / pBlocks) 'minimum block size
-    v_es = Int(pLen / pBlocks)  'ecc block size
-    v_x = pSize Mod pBlocks     'remain bytes
-    v_b2c = pBlocks - v_x       'on block number
+    v_bs = Int(pSize / pBlocks) 'minimum block size ⇒ 最小ブロックサイズ
+    v_es = Int(pLen / pBlocks)  'ecc block size ⇒ ECCブロックサイズ
+    v_x = pSize Mod pBlocks     'remain bytes ⇒ 残バイト
+    v_b2c = pBlocks - v_x       'on block number ⇒ ブロック番号
 
     ReDim v_ply(v_es + 1)
     v_z = 0
@@ -1024,8 +1094,8 @@ Private Sub QR_rs(ByVal pPoly As Integer, ByRef encArr() As Byte, ByVal pSize As
     Loop
 
     For v_b = 0 To pBlocks - 1
-        vpo = v_b * v_es + 1 + pSize    ' ECC start
-        vdo = v_b * v_bs + 1            ' data start
+        vpo = v_b * v_es + 1 + pSize    ' ECC start ⇒ ECC開始
+        vdo = v_b * v_bs + 1            ' data start ⇒ DATA開始
         If v_b > v_b2c Then
             ' x longers before
             vdo = vdo + v_b - v_b2c
@@ -1079,41 +1149,42 @@ Private Sub QR_initArr(ByRef qrParam As tQRParams, ByRef qrArr() As Byte)
 
     Siz = qrParam.Siz
 
-    ' Pole pro vystup
-    ReDim qrArr(0 To 1, 0 To (Siz + 1) * 24&) ' 24 bytes per row
+    ' Pole pro vystup ⇒ 出力フィールド
+    ReDim qrArr(0 To 1, 0 To (Siz + 1) * 24&) ' 24 bytes per row ⇒ 1行あたり24バイト
     qrArr(0, 0) = 0
     ch = 0
 
+    '位置検出パターン
     BB_putBits qrSync1, ch, Array(&HFE, &H82, &HBA, &HBA, &HBA, &H82, &HFE, 0), 64
-    ' sync UL
+    ' sync UL ⇒ 左上の同期
     QR_mask qrArr, qrSync1, 8, 0, 0
-    ' fmtinfo UL under - bity 14..9 SYNC 8
+    ' fmtinfo UL under - bity 14..9 SYNC 8 ⇒ 左上の下部の書式情報 - ビット14..9 同期8
     QR_mask qrArr, 0, 8, 8, 0
-    ' sync UR ( o bit vlevo )
+    ' sync UR ( o bit vlevo ) ⇒ 右上の同期(ちょっと左)
     QR_mask qrArr, qrSync1, 8, 0, Siz - 7
-    ' fmtinfo UR - bity 7..0
+    ' fmtinfo UR - bity 7..0 ⇒ 右上の書式情報(ビット7..0)
     QR_mask qrArr, 0, 8, 8, Siz - 8
-    ' sync DL (zasahuje i do quiet zony)
+    ' sync DL (zasahuje i do quiet zony) ⇒ 左下の同期(クワイエットゾーンにも影響)
     QR_mask qrArr, qrSync1, 8, Siz - 7, 0
-    ' blank nad DL
+    ' blank nad DL ⇒ 左下の上の空白
     QR_mask qrArr, 0, 8, Siz - 8, 0
 
     For idx = 0 To 6
-        ' svisle fmtinfo UL - bity 0..5 SYNC 6,7
+        ' svisle fmtinfo UL - bity 0..5 SYNC 6,7 ⇒ 左上の垂直書式情報 - ビット0..5 同期6,7
         QR_bit qrArr, -1, idx, 8, 0
-        ' svisly blank pred UR
+        ' svisly blank pred UR ⇒ 右上の直前の垂直の空白
         QR_bit qrArr, -1, idx, Siz - 8, 0
-        ' svisle fmtinfo DL - bity 14..8
+        ' svisle fmtinfo DL - bity 14..8 ⇒ 左下の垂直書式情報 - ビット14..8
         QR_bit qrArr, -1, Siz - 1 - idx, 8, 0
     Next idx
 
-    ' svisle fmtinfo UL - bity 0..5 SYNC 6,7
+    ' svisle fmtinfo UL - bity 0..5 SYNC 6,7 ⇒ 左上の垂直書式情報 - ビット0..5 同期6,7
     QR_bit qrArr, -1, 7, 8, 0
-    ' svisly blank pred UR
+    ' svisly blank pred UR ⇒ 右上の直前の垂直の空白
     QR_bit qrArr, -1, 7, Siz - 8, 0
-    ' svisle fmtinfo UL - bity 0..5 SYNC 6,7
+    ' svisle fmtinfo UL - bity 0..5 SYNC 6,7 ⇒ 左上の垂直書式情報 - ビット0..5 同期6,7
     QR_bit qrArr, -1, 8, 8, 0
-    ' black dot DL
+    ' black dot DL ⇒ 左下の黒ドット
     QR_bit qrArr, -1, Siz - 8, 8, 1
 
     'version info
@@ -1138,17 +1209,17 @@ Private Sub QR_initArr(ByRef qrParam As tQRParams, ByRef qrArr() As Byte)
         Next idx
     End If
 
-    'sync line
+    'sync line ⇒ タイミングパターン
     c = 1
     For idx = 8 To Siz - 9
-        ' vertical on column 6
+        ' vertical on column 6 ⇒ 6列目の垂直
         QR_bit qrArr, -1, idx, 6, c
-        ' horizontal on row 6
+        ' horizontal on row 6 ⇒ 6行目の水平
         QR_bit qrArr, -1, 6, idx, c
         c = (c + 1) Mod 2
     Next idx
 
-    'other sync
+    'other sync ⇒ アライメントパターン
     ch = 0
     BB_putBits qrSync2, ch, Array(&H1F, &H11, &H15, &H11, &H1F), 40
     With qrParam
@@ -1232,6 +1303,10 @@ End Sub
 Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr() As Byte, ByVal pBlkSiz As Integer, ByVal pDatLen As Integer, ByVal pTtlLen As Integer)
     ' vyplni pole parr (psiz x 24 bytes) z pole pb pdlen = pocet dbytes, pblocks = bloku, ptlen celkem
     ' podle logiky qr_kodu - s prokladem
+    ' ⇒ qrArr(pSiz×24バイト)をencArrでQRコードにしたがって折り返しながら埋めます。
+    '      pDatLen = データバイト数
+    '      pBlkSiz = ブロック
+    '      pTtlLen = 合計
     Dim vds As Integer, ves As Integer, vDnLen As Integer, vsb As Integer
     Dim vx As Integer, vy As Integer
     Dim vb As Integer
@@ -1240,12 +1315,13 @@ Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr()
     Dim smer As Integer
 
     ' qr code has first x blocks shorter than lasts but datamatrix has first longer and shorter last
-    vds = Int(pDatLen / pBlkSiz) ' shorter data block size
-    ves = Int((pTtlLen - pDatLen) / pBlkSiz) ' ecc block size
-    vDnLen = vds * pBlkSiz ' potud jsou databloky stejne velike
-    vsb = pBlkSiz - (pDatLen Mod pBlkSiz) ' mensich databloku je ?
+    ' ⇒ QRコードの最初のXブロックは最後のXブロックより短いですが、データマトリックスの最初のXブロックは長く、最後のXブロックは短くなります。
+    vds = Int(pDatLen / pBlkSiz) ' shorter data block size ⇒ 短い場合のブロックサイズ
+    ves = Int((pTtlLen - pDatLen) / pBlkSiz) ' ecc block size ⇒ ECCブロックサイズ
+    vDnLen = vds * pBlkSiz ' potud jsou databloky stejne velike ⇒ データブロックのサイズが同じ場合
+    vsb = pBlkSiz - (pDatLen Mod pBlkSiz) ' mensich databloku je ? ⇒ もっと小さいデータブロックがあるか?
 
-    ' start position on right lower corner
+    ' start position on right lower corner ⇒ 右下の角から始まる
     cIdx = pSiz - 1
     rIdx = cIdx
 
@@ -1268,32 +1344,32 @@ Private Sub QR_fill(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByRef encArr()
         End If
 
         Select Case smer
-        Case 0, 2 ' nahoru nebo dolu a jsem vpravo
+        Case 0, 2 ' nahoru nebo dolu a jsem vpravo ⇒ 上または下に到達。自分は右にいる
             cIdx = cIdx - 1
             smer = smer + 1
 
-        Case 1 ' nahoru a jsem vlevo
-            If rIdx = 0 Then ' nahoru uz to nejde
+        Case 1 ' nahoru a jsem vlevo ⇒ 上へ、自分は左にいる
+            If rIdx = 0 Then ' nahoru uz to nejde ⇒ もう上に移動できない
                 cIdx = cIdx - 1
                 If cIdx = 6 And pSiz >= 21 Then
-                    ' preskoc sync na sloupci 6
+                    ' preskoc sync na sloupci 6 ⇒ 6列目のタイミングパターンをスキップ
                     cIdx = cIdx - 1
                 End If
-                ' a jedeme dolu
+                ' a jedeme dolu ⇒ そしてまた下へ
                 smer = 2
 
             Else
                 cIdx = cIdx + 1
                 rIdx = rIdx - 1
-                ' furt nahoru
+                ' furt nahoru ⇒ 上昇を続ける
                 smer = 0
             End If
 
-        Case 3 ' dolu a jsem vlevo
-            If rIdx = pSiz - 1 Then ' dolu uz to nepude
+        Case 3 ' dolu a jsem vlevo ⇒ 下へ、自分は左にいる
+            If rIdx = pSiz - 1 Then ' dolu uz to nepude ⇒ もう下降できない
                 cIdx = cIdx - 1
                 If cIdx = 6 And pSiz >= 21 Then
-                    ' preskoc sync na sloupci 6
+                    ' preskoc sync na sloupci 6 ⇒ 6列目のタイミングパターンをスキップ
                     cIdx = cIdx - 1
                 End If
                 smer = 0
@@ -1372,7 +1448,7 @@ Private Sub QR_maskArr(ByRef qrParam As tQRParams, ByVal pECL As eErrorCorrectio
         QR_maskArr_addMM qrArr, pECL, Siz, idx
         score = QR_xorMask(qrArr, Siz, idx, False)
 #If DEBUG_ > 0 Then
-        Debug.Print "score mask " & mask & " is " & score
+        Debug.Print "score mask " & idx & " is " & score
 #End If
         If score < minScore Or minScore = -1 Then
             minScore = score
@@ -1406,15 +1482,15 @@ Private Sub QR_maskArr_addMM(ByRef qrArr() As Byte, ByVal pECL As eErrorCorrecti
     For idx = 0 To 14
         ch = k Mod 2
         k = Int(k / 2)
-        ' svisle fmtinfo UL - bity 0..5 SYNC 6,7 .... 8..14 dole
+        ' svisle fmtinfo UL - bity 0..5 SYNC 6,7 .... 8..14 dole ⇒ 垂直書式情報(左上) - ビット 0～5 SYNC 6,7～8～14 下
         QR_bit qrArr, -1, rIdx, 8, ch
-        ' vodorovne odzadu 0..7 ............ 8,SYNC,9..14
+        ' vodorovne odzadu 0..7 ............ 8,SYNC,9..14 ⇒ 後ろから水平に
         QR_bit qrArr, -1, 8, cIdx, ch
         cIdx = cIdx - 1
         rIdx = rIdx + 1
         If idx = 7 Then cIdx = 7: rIdx = Siz - 7
-        If idx = 5 Then rIdx = rIdx + 1 ' preskoc sync vodorvny
-        If idx = 8 Then cIdx = cIdx - 1 ' preskoc sync svisly
+        If idx = 5 Then rIdx = rIdx + 1 ' preskoc sync vodorvny ⇒ 水平同期をスキップ
+        If idx = 8 Then cIdx = cIdx - 1 ' preskoc sync svisly ⇒ 垂直同期をスキップ
     Next idx
 End Sub
 
@@ -1575,7 +1651,7 @@ Private Function QR_xorMask_scoring(ByRef qrArr() As Byte, ByRef wArr() As Byte,
         If Abs(rc) >= 5 Then score = score - 2 + Abs(rc)
     Next rIdx
 
-    For cIdx = 0 To pSiz - 1 ' after last row count column blocks
+    For cIdx = 0 To pSiz - 1 ' after last row count column blocks ⇒ 最終行の後の列ブロック数
         If Abs(cols(0, cIdx)) >= 5 Then score = score - 2 + Abs(cols(0, cIdx))
     Next cIdx
     bl = Int(Abs((bl * 100&) / (pSiz * pSiz) - 50&) / 5) * 10
@@ -1597,7 +1673,7 @@ Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow
     rIdx = pRow
     cIdx = pCol
     QR_bit = False
-    idx = rIdx * 24 + Int(cIdx / 8) ' 24 bytes per row
+    idx = rIdx * 24 + Int(cIdx / 8) ' 24 bytes per row ⇒ 1行あたり24バイト
     If idx > UBound(qrArr, 2) Or idx < 0 Then
         outErr "QR_bit : out of range"
         Exit Function
@@ -1606,7 +1682,7 @@ Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow
     cIdx = 2 ^ (cIdx Mod 8)
     Value = qrArr(0, idx)
     If pSiz > 0 Then
-        ' Kontrola masky
+        ' Kontrola masky ⇒ マスクチェック
         If (Value And cIdx) = 0 Then
             If pBit <> 0 Then
                 qrArr(1, idx) = qrArr(1, idx) Or cIdx
@@ -1619,9 +1695,9 @@ Private Function QR_bit(ByRef qrArr() As Byte, ByVal pSiz As Integer, ByVal pRow
 
     Else
         QR_bit = True
-        qrArr(1, idx) = qrArr(1, idx) And (255 - cIdx) ' reset bit for psiz <= 0
+        qrArr(1, idx) = qrArr(1, idx) And (255 - cIdx) ' reset bit for psiz <= 0 ⇒ pSizがマイナスの場合はbitをリセットする
         If pBit > 0 Then qrArr(1, idx) = qrArr(1, idx) Or cIdx
-        If pSiz < 0 Then qrArr(0, idx) = qrArr(0, idx) Or cIdx ' mask for psiz < 0
+        If pSiz < 0 Then qrArr(0, idx) = qrArr(0, idx) Or cIdx ' mask for psiz < 0 ⇒ pSizがマイナスの場合はマスク
     End If
 End Function
 

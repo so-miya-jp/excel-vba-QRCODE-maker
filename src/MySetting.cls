@@ -23,8 +23,8 @@ Private Sub Class_Initialize()
 End Sub
 
 '''設定の読み込み
-''' @param Secreted / I / Trueの場合、エラー時にメッセージを非表示とする(省略時はFalse)
-Public Sub LoadSetting(Optional ByVal Secreted As Boolean = False)
+''' @param Silenced / I / Trueの場合、エラー時にメッセージを非表示とする(省略時はFalse)
+Public Sub LoadSetting(Optional ByVal Silenced As Boolean = False)
     Dim sh As Worksheet
     Dim Rng As Range
     Dim ar() As Variant
@@ -38,23 +38,26 @@ Public Sub LoadSetting(Optional ByVal Secreted As Boolean = False)
     Set sh = SettingSheet
     Set Rng = sh.ListObjects("設定表").DataBodyRange
 
-    If sh.Comments.Count > 0 Then
-        If Not Intersect(sh.Cells.SpecialCells(xlCellTypeComments), Rng) Is Nothing Then
-            'コメントが存在する場合、コメントを削除
-            Rng.ClearComments
+    If Not Silenced Then
+        If sh.Comments.Count > 0 Then
+            If Not Intersect(sh.Cells.SpecialCells(xlCellTypeComments), Rng) Is Nothing Then
+                'コメントが存在する場合、コメントを削除
+                Rng.ClearComments
 #If DEBUG_ > 0 Then
-            Debug.Print "LoadSetting ClearComments"
+                Debug.Print "LoadSetting ClearComments"
+#End If
+            End If
+        End If
+
+        If Rng.Interior.ColorIndex <> xlNone Then
+            '背景色の変更をなしにする。
+            Rng.Interior.ColorIndex = xlNone
+#If DEBUG_ > 0 Then
+            Debug.Print "LoadSetting ColorIndex = xlNone"
 #End If
         End If
     End If
 
-    If Rng.Interior.ColorIndex <> xlNone Then
-        '背景色の変更をなしにする。
-        Rng.Interior.ColorIndex = xlNone
-#If DEBUG_ > 0 Then
-        Debug.Print "LoadSetting ColorIndex = xlNone"
-#End If
-    End If
     ar = Rng
 
     msgChunk = ""
@@ -109,7 +112,7 @@ Public Sub LoadSetting(Optional ByVal Secreted As Boolean = False)
         End Select
     Next idx
 
-    If Not Secreted And msgChunk <> "" Then
+    If Not Silenced And msgChunk <> "" Then
         MsgBox Mid(msgChunk, 2)
     End If
 
@@ -119,10 +122,12 @@ Public Sub LoadSetting(Optional ByVal Secreted As Boolean = False)
 
 ErrorSub:
     msgChunk = msgChunk & vbLf & sKey & ":" & msg & "(" & sValue & ")"
-    With Rng.Cells(idx, 2)
-        .AddComment msg
-        .Interior.Color = rgbPink
-    End With
+    If Not Silenced Then
+        With Rng.Cells(idx, 2)
+            .AddComment msg
+            .Interior.Color = rgbPink
+        End With
+    End If
 
     Return
 End Sub

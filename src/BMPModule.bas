@@ -62,7 +62,6 @@ End Type
 ''' @return 成功した場合はTrue
 Public Function ExportBMPFile(ByVal Path As String, ByRef pData() As Variant, Optional ByRef pColors As Variant, Optional ByVal pDpi As Integer = 96) As Boolean
     Dim bmpInfo As tBITMAPINFO
-    Dim fileNo As Long
 
     ExportBMPFile = False
 
@@ -71,33 +70,8 @@ Public Function ExportBMPFile(ByVal Path As String, ByRef pData() As Variant, Op
         Exit Function
     End If
 
-    On Error GoTo OutputError
-
-    '既存ファイルの削除
-    If Dir(Path) <> "" Then Kill Path
-
-    fileNo = FreeFile()
-    Open Path For Binary As #fileNo
-
-    With bmpInfo
-        'ファイルヘッダの出力
-        Put #fileNo, , .fileHedaer
-        '情報ヘッダの出力
-        Put #fileNo, , .infoHeader
-
-        If .infoHeader.biClrUsed > 0 Then
-            'カラーマップの出力
-            Put #fileNo, , .colorMap
-        End If
-
-        'ビットマップ情報の出力
-        Put #fileNo, , .Body
-    End With
-
-    Close #fileNo
-
-    ExportBMPFile = True
-OutputError:
+    'ビットマップファイルの出力
+    ExportBMPFile = WriteBMPFile(Path, bmpInfo)
 End Function
 
 '''指定したパスをBMPファイルとして読み込み、24bitカラーマップとして読み込む
@@ -106,71 +80,19 @@ End Function
 ''' @param errCd / O / 失敗時のエラーコード(省略可能)
 ''' @return Trueの場合、成功。
 Public Function ImportBMPFile(ByVal Path As String, ByRef pData() As Long, Optional ByRef errCd As eErrorCode) As Boolean
-    Dim Ret As eErrorCode
     Dim bmpInfo As tBITMAPINFO
-    Dim bWidth As Long, bPadding As Long
-    Dim rIdx As Long, cIdx As Long, bIdx As Long, lIdx As Long
-    Dim word As Byte
 
-    Ret = ReadBMPFile(bmpInfo, Path)
-    If Ret <> 0 Then
-        errCd = Ret
-        ImportBMPFile = False
+    ImportBMPFile = False
+
+    'ビットマップファイルの入力
+    errCd = ReadBMPFile(bmpInfo, Path)
+    If errCd <> NML_SUCCESS Then
         Exit Function
     End If
 
-    With bmpInfo.infoHeader
-        '24bitカラーマップの高さと幅を確定
-        ReDim pData(1 To .biHeight, 1 To .biWidth)
-        
-        'ビット数と画像幅からバイト単位画面幅を計算
-        GetByteWidth bWidth, bPadding, .biBitCount, .biWidth
-        bWidth = bWidth + bPadding
-    End With
+    'カラーマップの作成
+    CreateColorMap pData, bmpInfo
 
-    For rIdx = LBound(pData, 1) To UBound(pData, 1)
-        bIdx = (UBound(pData, 1) - rIdx) * bWidth
-        For cIdx = LBound(pData, 2) To UBound(pData, 2)
-            With bmpInfo
-                Select Case .infoHeader.biBitCount
-                Case 1
-                    If (cIdx - 1) Mod 8 = 0 Then
-                        word = .Body(bIdx)
-                        bIdx = bIdx + 1
-                    End If
-                    lIdx = (8 - (cIdx Mod 8)) Mod 8
-                    lIdx = word / 2 ^ lIdx
-                    lIdx = lIdx And 1
-
-                Case 4
-                    If (cIdx - 1) Mod 2 = 0 Then
-                        word = .Body(bIdx)
-                        bIdx = bIdx + 1
-                        lIdx = (word / &H10) And &HF
-
-                    Else
-                        lIdx = word And &HF
-                    End If
-
-                Case 8
-                    word = .Body(bIdx)
-                    bIdx = bIdx + 1
-                    lIdx = word And &HFF
-
-                Case 24
-                    pData(rIdx, cIdx) = RGB(.Body(bIdx + 2), .Body(bIdx + 1), .Body(bIdx))
-                    bIdx = bIdx + 3
-                End Select
-
-                Select Case .infoHeader.biBitCount
-                Case 1, 4, 8
-                    With .colorMap(lIdx)
-                        pData(rIdx, cIdx) = RGB(.rgbRed, .rgbGreen, .rgbBlue)
-                    End With
-                End Select
-            End With
-        Next cIdx
-    Next rIdx
     ImportBMPFile = True
 End Function
 
@@ -421,6 +343,43 @@ Private Function CreateBMPInfo(ByRef info As tBITMAPINFO, ByRef pData() As Varia
     CreateBMPInfo = True
 End Function
 
+'''BMPファイルの書き込み
+''' @param Path    / I / 出力ファイルパス
+''' @param bmpInfo / I / ビットマップ情報
+''' @return 成功した場合はTrue
+Private Function WriteBMPFile(ByVal Path As String, ByRef bmpInfo As tBITMAPINFO) As Boolean
+    Dim fileNo As Long
+
+    WriteBMPFile = False
+    On Error GoTo OutputError
+
+    '既存ファイルの削除
+    If Dir(Path) <> "" Then Kill Path
+
+    fileNo = FreeFile()
+    Open Path For Binary As #fileNo
+
+    With bmpInfo
+        'ファイルヘッダの出力
+        Put #fileNo, , .fileHedaer
+        '情報ヘッダの出力
+        Put #fileNo, , .infoHeader
+
+        If .infoHeader.biClrUsed > 0 Then
+            'カラーマップの出力
+            Put #fileNo, , .colorMap
+        End If
+
+        'ビットマップ情報の出力
+        Put #fileNo, , .Body
+    End With
+
+    Close #fileNo
+
+    WriteBMPFile = True
+OutputError:
+End Function
+
 '''BMPファイルの読み込み
 ''' @param bmpInfo / O / BMP情報
 ''' @param Path    / I / 入力ファイルパス
@@ -514,6 +473,68 @@ Private Function ReadBMPFile(ByRef bmpInfo As tBITMAPINFO, ByVal Path As String)
 InputError:
     Close #fileNo
 End Function
+
+'''カラーマップの作成
+''' @param pData   / O / カラーマップ
+''' @param bmpInfo / I / ビットマップ情報
+Private Sub CreateColorMap(ByRef pData() As Long, ByRef bmpInfo As tBITMAPINFO)
+    Dim bWidth As Long, bPadding As Long
+    Dim rIdx As Long, cIdx As Long, bIdx As Long, lIdx As Long
+    Dim word As Byte
+
+    With bmpInfo.infoHeader
+        '24bitカラーマップの高さと幅を確定
+        ReDim pData(1 To .biHeight, 1 To .biWidth)
+        
+        'ビット数と画像幅からバイト単位画面幅を計算
+        GetByteWidth bWidth, bPadding, .biBitCount, .biWidth
+        bWidth = bWidth + bPadding
+    End With
+
+    For rIdx = LBound(pData, 1) To UBound(pData, 1)
+        bIdx = (UBound(pData, 1) - rIdx) * bWidth
+        For cIdx = LBound(pData, 2) To UBound(pData, 2)
+            With bmpInfo
+                Select Case .infoHeader.biBitCount
+                Case 1
+                    If (cIdx - 1) Mod 8 = 0 Then
+                        word = .Body(bIdx)
+                        bIdx = bIdx + 1
+                    End If
+                    lIdx = (8 - (cIdx Mod 8)) Mod 8
+                    lIdx = word / 2 ^ lIdx
+                    lIdx = lIdx And 1
+
+                Case 4
+                    If (cIdx - 1) Mod 2 = 0 Then
+                        word = .Body(bIdx)
+                        bIdx = bIdx + 1
+                        lIdx = (word / &H10) And &HF
+
+                    Else
+                        lIdx = word And &HF
+                    End If
+
+                Case 8
+                    word = .Body(bIdx)
+                    bIdx = bIdx + 1
+                    lIdx = word And &HFF
+
+                Case 24
+                    pData(rIdx, cIdx) = RGB(.Body(bIdx + 2), .Body(bIdx + 1), .Body(bIdx))
+                    bIdx = bIdx + 3
+                End Select
+
+                Select Case .infoHeader.biBitCount
+                Case 1, 4, 8
+                    With .colorMap(lIdx)
+                        pData(rIdx, cIdx) = RGB(.rgbRed, .rgbGreen, .rgbBlue)
+                    End With
+                End Select
+            End With
+        Next cIdx
+    Next rIdx
+End Sub
 
 '''ビット数と画像幅からバイト単位画面幅とパディングを計算
 ''' @param bWidth   / O / バイト単位画面幅

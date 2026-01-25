@@ -64,7 +64,6 @@ End Enum
 Private Enum ePrivateModeBit
     MOD_NUM = 1
     MOD_ALNUM = 2
-    MOD_ALNUMS = MOD_NUM Or MOD_ALNUM
     MOD_BYTE = 4
     MOD_KANJI = 8
 End Enum
@@ -82,6 +81,14 @@ Private Enum eType
     TYP_BYTE = 3    'バイトモード
     TYP_KANJI = 4   '漢字モード
 End Enum
+
+'文字毎の情報
+Private Type tLetterItem
+    IsNum As Boolean
+    IsAlnum As Boolean
+    IsKanji As Boolean
+    BytSiz As Byte
+End Type
 
 'モード毎の解析一時保持要素
 Private Type tEcxItem
@@ -323,95 +330,112 @@ End Function
 ''' @param pMode / I / 文字種指定ビット
 ''' @param eb    / O / 解析結果。モード、位置、桁数を持つ配列
 Private Sub QR_anlyz(ByVal pText As String, ByVal pMode As eModeBit, ByRef eb() As tEbItem)
+    Dim ltInf() As tLetterItem
+
+    '文字毎解析処理
+    QR_anlyz_letter pText, pMode, ltInf
+
+    'メイン解析処理
+    QR_anlyz_main ltInf, eb
+End Sub
+
+'''変換対象文字列の解析：文字毎の解析
+''' @param pText / I / 変換対象文字列
+''' @param pMode / I / 文字種指定ビット
+''' @param ltInf / O / 文字毎の情報
+Private Sub QR_anlyz_letter(ByVal pText As String, ByVal pMode As eModeBit, ByRef ltInf() As tLetterItem)
     Dim idx As Long
     Dim ch As String
     Dim utfCd As Long   'UTF code
-    Dim sjisCd As Long  'SJIS code
     Dim anIdx As Long   'ALNUM index
-    Dim ltSiz As Long   'letter size
-    Dim nxTyp As eType
-    Dim ecx(TYP_NUM To TYP_KANJI) As tEcxItem
-    Dim bytSiz() As Integer
 
-    For idx = LBound(ecx) To UBound(ecx): With ecx(idx)
-        .Cnt = 0: .Pos = 0
-    End With: Next idx
-
-    ReDim bytSiz(1 To Len(pText))
-    For idx = 1 To Len(pText)
+    ReDim ltInf(1 To Len(pText))
+    For idx = LBound(ltInf) To UBound(ltInf): With ltInf(idx)
         ch = Mid(pText, idx, 1)
         utfCd = AscL(ch)
         If utfCd >= &H1FFFFF Then ' FFFF - 1FFFFFFF
-            bytSiz(idx) = 4
+            .BytSiz = 4
 
         ElseIf utfCd >= &H7FF Then ' 7FF-FFFF 3 bytes
-            bytSiz(idx) = 3
+            .BytSiz = 3
 
         ElseIf utfCd >= &H80 Then ' 2 bytes
-            bytSiz(idx) = 2
+            .BytSiz = 2
 
         Else
-            bytSiz(idx) = 1
+            .BytSiz = 1
         End If
-    Next idx
 
-    For idx = 1 To Len(pText)
-        ch = Mid(pText, idx, 1)
-        ltSiz = bytSiz(idx)
-        nxTyp = TYP_BYTE
-        Select Case ltSiz
+        .IsNum = False
+        .IsAlnum = False
+        .IsKanji = False
+        Select Case .BytSiz
         Case 1
-            If (pMode And MOD_ALNUMS) = 0 Then
-                anIdx = -1
+            anIdx = InStr(QR_ALNUM, ch) - 1
+            If anIdx >= 0 Then
+                If (pMode And MOD_NUM) = MOD_NUM Then
+                    If anIdx < 10 Then
+                        .IsNum = True
+                    End If
+                End If
 
-            Else
-                anIdx = InStr(QR_ALNUM, ch) - 1
-                If anIdx < 10 Then
-                    If (pMode And MOD_NUM) = 0 Then anIdx = -1
-
-                ElseIf (pMode And MOD_ALNUM) = 0 Then
-                    anIdx = -1
+                If (pMode And MOD_ALNUM) = MOD_ALNUM Then
+                    .IsAlnum = True
                 End If
             End If
 
-            sjisCd = -1
-            If anIdx >= 0 Then
-                nxTyp = TYP_NUM
-                If anIdx > 9 Then nxTyp = TYP_ALNUM
-            End If
-
-        Case 2
-            anIdx = -1
-            sjisCd = -1
-
-        Case Else
-            anIdx = -1
+        Case 3, 4
             If (pMode And MOD_KANJI) = MOD_KANJI Then
-
-                sjisCd = QR_AscK(ch)
-                If sjisCd >= 0 Then nxTyp = TYP_KANJI
-
-            Else
-                sjisCd = -1
+                If QR_AscK(ch) >= 0 Then
+                    .IsKanji = True
+                End If
             End If
         End Select
+    End With: Next idx
+End Sub
 
-        If ecx(TYP_NUM).Cnt > 0 And (anIdx < 0 Or anIdx > 9) Then
+'''変換対象文字列の解析メイン
+''' @param ltInf / I / 文字毎の情報
+''' @param eb    / O / 解析結果。モード、位置、桁数を持つ配列
+Private Sub QR_anlyz_main(ByRef ltInf() As tLetterItem, ByRef eb() As tEbItem)
+    Dim idx As Long, pIdx As Long
+    Dim nxTyp As eType
+    Dim ecx(TYP_NUM To TYP_KANJI) As tEcxItem
+    
+    For idx = LBound(ecx) To UBound(ecx): With ecx(idx)
+        .Cnt = 0: .Pos = 0
+    End With: Next idx
+    
+    For idx = LBound(ltInf) To UBound(ltInf): With ltInf(idx)
+        If .IsNum Then
+            nxTyp = TYP_NUM
+
+        ElseIf .IsAlnum Then
+            nxTyp = TYP_ALNUM
+
+        ElseIf .IsKanji Then
+            nxTyp = TYP_KANJI
+
+        Else
+            nxTyp = TYP_BYTE
+        End If
+
+        If ecx(TYP_NUM).Cnt > 0 And (Not .IsNum) Then
             GoSub FIN_NUMERIC
 
-        ElseIf ecx(TYP_ALNUM).Cnt > 0 And anIdx < 0 Then
+        ElseIf ecx(TYP_ALNUM).Cnt > 0 And (Not .IsAlnum) Then
             GoSub FIN_ALPH_NUMERIC
 
-        ElseIf ecx(TYP_KANJI).Cnt > 0 And sjisCd < 0 Then
+        ElseIf ecx(TYP_KANJI).Cnt > 0 And (Not .IsKanji) Then
             GoSub FIN_KANJI
 
         End If
 
-        QR_anlyz_cntLtr ecx, TYP_NUM, idx, (anIdx < 0 Or anIdx > 9)
-        QR_anlyz_cntLtr ecx, TYP_ALNUM, idx, (anIdx < 0)
-        QR_anlyz_cntLtr ecx, TYP_BYTE, idx, False, ltSiz
-        QR_anlyz_cntLtr ecx, TYP_KANJI, idx, (sjisCd < 0)
-    Next idx
+        QR_anlyz_cntLtr ecx, TYP_NUM, idx, (Not .IsNum)
+        QR_anlyz_cntLtr ecx, TYP_ALNUM, idx, (Not .IsAlnum)
+        QR_anlyz_cntLtr ecx, TYP_BYTE, idx, False, .BytSiz
+        QR_anlyz_cntLtr ecx, TYP_KANJI, idx, (Not .IsKanji)
+    End With: Next idx
 
     nxTyp = TYP_UNKNOWN
     If ecx(TYP_NUM).Cnt > 0 Then GoSub FIN_NUMERIC
@@ -430,12 +454,12 @@ Private Sub QR_anlyz(ByVal pText As String, ByVal pMode As eModeBit, ByRef eb() 
     '    Ver.10～26では数字が8桁未満
     '    Ver.27～40では数字が9桁未満
     '- 数字の前後がALNUMに挟まれている場合、以下の条件ならばALNUMとして出力したほうがビット数が少ない
-    '  ALNUMの文字数が奇数の場合。
+    '  両方のALNUMの文字数が奇数の場合。
     '    Ver.1～9では数字が14桁未満
     '    Ver.10～26では数字が17桁未満
     '    Ver.27～40では数字が18桁未満
-    '  ALNUMの文字数が偶数の場合。
-    '    Ver.1～9では数字が14桁未満
+    '  ALNUMの文字数が少なくとも片方偶数の場合。
+    '    Ver.1～9では数字が13桁未満(13桁では同ビット数)
     '    Ver.10～26では数字が15桁未満
     '    Ver.27～40では数字が17桁未満
     '- byteと数字が隣接している場合、以下の条件ならばbyteとして出力したほうがビット数が少ない
@@ -449,9 +473,9 @@ Private Sub QR_anlyz(ByVal pText As String, ByVal pMode As eModeBit, ByRef eb() 
     '  Ver.10～26ではALNUMが7桁未満
     '  Ver.27～40ではALNUMが8桁未満
     '- ALNUMの前後がbyteに挟まれている場合、以下の条件ならばbyteとして出力したほうがビット数が少ない
-    '  Ver.1～9ではALNUMが10桁未満
-    '  Ver.10～26ではALNUMが14桁未満
-    '  Ver.27～40ではALNUMが16桁未満
+    '  Ver.1～9ではALNUMが10桁未満(10桁では同ビット数)
+    '  Ver.10～26ではALNUMが14桁未満(14桁では同ビット数)
+    '  Ver.27～40ではALNUMが15桁未満(15桁では同ビット数)
 
     '以降のロジックはVer.27以降を基準としている。ALNUMの文字数の奇数/偶数は使用しない。
 FIN_NUMERIC:
@@ -532,9 +556,9 @@ FIN_ALPH_NUMERIC:
         ecx(TYP_ALNUM).Cnt = 0
         Return
     
-    ElseIf ecx(TYP_ALNUM).Cnt < 16 Then
+    ElseIf ecx(TYP_ALNUM).Cnt < 15 Then
         If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) > 0 And nxTyp = TYP_BYTE Then
-            'ALNUMが16文字未満で、未出力のbyteが存在し、次の文字がbyteの場合、byteとして出力予定
+            'ALNUMが15文字未満で、未出力のbyteが存在し、次の文字がbyteの場合、byteとして出力予定
             ecx(TYP_ALNUM).Cnt = 0
             Return
         End If
@@ -563,7 +587,15 @@ FIN_KANJI:
     'End If
 
     If ecxcmp(ecx, TYP_BYTE, TYP_KANJI) > 0 Then
-        QR_addEb eb, ecx, TYP_BYTE, TYP_KANJI, bytSiz
+        QR_addEb eb, ecx, TYP_BYTE, TYP_KANJI
+        '漢字モード文字列にバイトモード文字列が先行している場合にバイトを出力するときのeb(idx).Cntは別計算
+        'SJIS 1文字はUTF-8で3～4byteなので漢字モード文字列手前までのbyte数を再計算する。
+        With eb(UBound(eb))
+            .Cnt = 0
+            For pIdx = ecx(TYP_BYTE).Pos To ecx(TYP_KANJI).Pos - 1
+                .Cnt = .Cnt + ltInf(pIdx).BytSiz
+            Next pIdx
+        End With
     End If
 
     QR_addEb eb, ecx, TYP_KANJI
@@ -582,9 +614,6 @@ End Sub
 ''' @return 元タイプが先タイプよりも先行している場合、正の数を返却する。
 Private Function ecxcmp(ByRef ecx() As tEcxItem, ByVal sTyp As eType, ByVal dTyp As eType) As Integer
     If sTyp = TYP_BYTE And dTyp = TYP_KANJI Then
-        ecxcmp = ecx(dTyp).Pos - ecx(sTyp).Pos
-
-    ElseIf sTyp = TYP_KANJI And dTyp = TYP_BYTE Then
         ecxcmp = ecx(dTyp).Pos - ecx(sTyp).Pos
 
     Else
@@ -613,8 +642,7 @@ End Sub
 ''' @param ecx    / I / ecx情報
 ''' @param tTyp   / I / 対象モードタイプ
 ''' @param sTyp   / I / 除外モードタイプ(省略時はTYP_UNKNOWN)
-''' @param bytSiz / I / 文字毎のバイト数配列(省略可能)
-Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp As eType, Optional ByVal sTyp As eType = TYP_UNKNOWN, Optional ByRef bytSiz As Variant)
+Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp As eType, Optional ByVal sTyp As eType = TYP_UNKNOWN)
     Dim idx As Integer
 
     If tTyp = TYP_UNKNOWN Then
@@ -634,14 +662,6 @@ Private Sub QR_addEb(ByRef eb() As tEbItem, ByRef ecx() As tEcxItem, ByVal tTyp 
         .Pos = ecx(tTyp).Pos
         If sTyp = TYP_UNKNOWN Then
             .Cnt = ecx(tTyp).Cnt
-
-        ElseIf IsArray(bytSiz) Then
-            '漢字モード文字列にバイトモード文字列が先行している場合にバイトを出力するときの処理。
-            'SJIS 1文字はUTF-8で3～4byteなので漢字モード文字列手前までのbyte数を再計算する。
-            .Cnt = 0
-            For idx = ecx(tTyp).Pos To ecx(sTyp).Pos - 1
-                .Cnt = .Cnt + bytSiz(idx)
-            Next idx
 
         Else
             .Cnt = ecx(tTyp).Cnt - ecx(sTyp).Cnt

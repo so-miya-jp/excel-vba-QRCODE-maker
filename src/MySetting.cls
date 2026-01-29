@@ -7,6 +7,19 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem MySetting / 設定管理
+Rem --------------------------------------------------------------------------------
+Rem 公開関数/サブルーチン
+Rem   LoadSetting : 設定の読み込み
+Rem   Update      : 設定シートが変更された
+Rem 公開プロパティ
+Rem   MaskPattern : マスクパターン(読み取り専用)
+Rem   ModeSet     : 文字種モードセット(読み取り専用)
+Rem   ImageFolder : 画像フォルダパス(読み取り専用)
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 
 '---- メンバー変数
@@ -19,7 +32,6 @@ Private ImageFolder_ As String
 '''クラス初期処理
 Private Sub Class_Initialize()
     DirtyFlag_ = True
-    LoadSetting True
 End Sub
 
 '''設定の読み込み
@@ -65,8 +77,11 @@ Public Sub LoadSetting(Optional ByVal Silenced As Boolean = False)
     For idx = LBound(ar, 1) To UBound(ar, 1)
         sKey = UCase(Trim(ar(idx, 1)))
         sValue = Trim(ar(idx, 2))
-        If InStr(sValue, ":") > 0 Then
-            sValue = Trim(Split(sValue, ":")(0))
+
+        If InStr(sKey, "FOLDER") = 0 Then
+            If InStr(sValue, ":") > 0 Then
+                sValue = Trim(Split(sValue, ":")(0))
+            End If
         End If
         lValue = Val(sValue)
 

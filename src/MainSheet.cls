@@ -7,6 +7,11 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem MainSheet / ˆêŠ‡QRCODEì¬ƒV[ƒgˆ—
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 
 Enum LIST_COL

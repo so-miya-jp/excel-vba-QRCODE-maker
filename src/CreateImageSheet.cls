@@ -7,6 +7,11 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem CreateImageSheet / QRCODE画像生成シート処理
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 
 '''[変換]ボタン押下時の処理
@@ -39,7 +44,7 @@ Sub CreateQRCodeImage_Click()
 
     '出力ファイルパス
     txtFilePath = ar(3, 1)
-    
+
     '要素
     Set elementRng = Nothing
     If Trim(ar(4, 1)) <> "" Then
@@ -147,9 +152,9 @@ Sub LoadImage_Click()
             Path = .SelectedItems(1)
         End If
     End With
-    
+
     If Path = "" Then Exit Sub
-    
+
     If Not ImportImage(Path, data, sh) Then
         MsgBox "画像の読み込みに失敗しました。"
         Exit Sub
@@ -163,7 +168,7 @@ Sub LoadImage_Click()
         Set Rng = Rng.Areas(1)
     End If
     Set Rng = Rng.Resize(UBound(data, 1), UBound(data, 2))
-    
+
     Do
         If Not Rng.Worksheet Is sh Then
             initText = Rng.Address(External:=True)
@@ -188,7 +193,7 @@ Sub LoadImage_Click()
         End If
         Set Rng = Rng.Resize(UBound(data, 1), UBound(data, 2))
     Loop
-    
+
     If Rng Is Nothing Then
         MsgBox "画像の読み込みを中断しました。"
         Exit Sub
@@ -197,7 +202,7 @@ Sub LoadImage_Click()
     With Rng
         .RowHeight = 10
         .ColumnWidth = 1
-        
+
         .Borders(xlEdgeTop).LineStyle = xlContinuous
         .Borders(xlEdgeBottom).LineStyle = xlContinuous
         .Borders(xlEdgeLeft).LineStyle = xlContinuous

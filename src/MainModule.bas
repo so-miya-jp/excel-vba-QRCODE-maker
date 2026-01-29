@@ -1,4 +1,15 @@
 Attribute VB_Name = "MainModule"
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem MainModule / メイン処理
+Rem --------------------------------------------------------------------------------
+Rem 公開関数/サブルーチン
+Rem   WriteQRCode     : QRコードの生成および指定Rangeへの書き込み
+Rem   SplitFile       : 指定ファイルをQRコードに変換できるサイズに行単位分割
+Rem   DrawQRCodeImage : QRコード画像の生成および指定Range位置に画像を貼り付け
+Rem   ImportImage     : 指定ファイルを24bitカラーマップとして読み込み
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 
 '''変換対象文字列をQRコードに変換し、指定Rangeに書き込む。
@@ -284,7 +295,7 @@ Public Function ImportImage(ByVal Path As String, ByRef pData() As Long, Optiona
         ImportImage = True
         Exit Function
     End If
-        
+
     If errCd <> ERR_FORMAT And errCd <> ERR_WINDOWS And errCd <> ERR_COMPRESS Then
         '読めない画像形式以外のエラー
         ImportImage = False
@@ -342,3 +353,4 @@ Private Sub Test_Create24BitElement()
         Next c
     Next r
 End Sub
+

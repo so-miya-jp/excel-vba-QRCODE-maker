@@ -1,4 +1,16 @@
 Attribute VB_Name = "QRCodeModule"
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem QRCodeModule / QRコード生成処理
+Rem --------------------------------------------------------------------------------
+Rem 公開列挙型
+Rem   eErrorCorrectionLevel : エラー補正レベル
+Rem   eMaskType             : マスク種類
+Rem   eModeBit              : 文字種パターンビット
+Rem 公開関数/サブルーチン
+Rem   GetQRCode       : QRコード生成
+Rem   CheckQRCode     : QRコード生成可能な文字列か判定
+Rem --------------------------------------------------------------------------------
 Rem このQRCodeModuleは、以下のバーコード生成ライブラリからQRコードの生成に必要な分を抜き出し、
 Rem 修正したものです。
 Rem オリジナルとは以下の点が異なります。
@@ -44,6 +56,7 @@ Public Enum eErrorCorrectionLevel
     ECL_Q = 3
 End Enum
 
+'マスク種類
 Public Enum eMaskType
     MSK_AUTO = -1
     MSK_000 = 0 ' (c + r) Mod 2 = 0
@@ -116,7 +129,7 @@ End Type
 
 Private IsMs As Boolean
 Private ErrTxt As String
-Public COUNT_LENGTH() As Variant
+Private COUNT_LENGTH() As Variant
 
 '''初期化処理
 Private Sub Init()
@@ -401,11 +414,11 @@ Private Sub QR_anlyz_main(ByRef ltInf() As tLetterItem, ByRef eb() As tEbItem)
     Dim idx As Long, pIdx As Long
     Dim nxTyp As eType
     Dim ecx(TYP_NUM To TYP_KANJI) As tEcxItem
-    
+
     For idx = LBound(ecx) To UBound(ecx): With ecx(idx)
         .Cnt = 0: .Pos = 0
     End With: Next idx
-    
+
     For idx = LBound(ltInf) To UBound(ltInf): With ltInf(idx)
         If .IsNum Then
             nxTyp = TYP_NUM
@@ -555,7 +568,7 @@ FIN_ALPH_NUMERIC:
         'ALNUMが8文字未満で、次の文字が漢字以外の場合、byteとして出力予定
         ecx(TYP_ALNUM).Cnt = 0
         Return
-    
+
     ElseIf ecx(TYP_ALNUM).Cnt < 15 Then
         If ecxcmp(ecx, TYP_BYTE, TYP_ALNUM) > 0 And nxTyp = TYP_BYTE Then
             'ALNUMが15文字未満で、未出力のbyteが存在し、次の文字がbyteの場合、byteとして出力予定
@@ -1445,7 +1458,7 @@ Private Sub QR_maskArr(ByRef qrParam As tQRParams, ByVal pECL As eErrorCorrectio
 
         Exit Sub
     End If
-        
+
     minScore = -1
     For idx = 0 To 7
         QR_maskArr_addMM qrArr, pECL, Siz, idx
@@ -1908,3 +1921,4 @@ Private Function BC_to2Dim(ByVal pBarCode As String, ByRef ar() As Variant) As B
 
     BC_to2Dim = True
 End Function
+

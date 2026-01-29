@@ -1,4 +1,16 @@
 Attribute VB_Name = "BMPModule"
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem BMPModule / ビットマップ画像入出力
+Rem --------------------------------------------------------------------------------
+Rem 公開列挙型
+Rem   eErrorCode : エラーコード
+Rem 公開関数/サブルーチン
+Rem   ExportBMPFile  : ビットマップファイル出力
+Rem   ImportBMPFile  : ビットマップファイル入力
+Rem   CreateIndexMap : インデックスマップ作成
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 Option Private Module
 
@@ -138,7 +150,7 @@ Public Function CreateIndexMap(ByRef pIndexMap() As Variant, ByRef pColors() As 
 
                         Exit Function
                     End If
-                    
+
                     ReDim Preserve clCand(0 To 1, 0 To lIdx)
                     clCand(0, lIdx) = clr
                     clCand(1, lIdx) = 1
@@ -392,7 +404,7 @@ Private Function ReadBMPFile(ByRef bmpInfo As tBITMAPINFO, ByVal Path As String)
 
     ReadBMPFile = ERR_UNKNOWN
     On Error GoTo InputError
-    
+
     If Dir(Path) = "" Then
 #If DEBUG_ > 0 Then
         Debug.Print "ファイルが見つかりません。(" & Path & ")"
@@ -404,7 +416,7 @@ Private Function ReadBMPFile(ByRef bmpInfo As tBITMAPINFO, ByVal Path As String)
     ReadBMPFile = ERR_OPEN
     fileNo = FreeFile()
     Open Path For Binary As #fileNo
-        
+
     With bmpInfo
         ReadBMPFile = ERR_READ
         'ファイルヘッダの読み取り
@@ -450,7 +462,7 @@ Private Function ReadBMPFile(ByRef bmpInfo As tBITMAPINFO, ByVal Path As String)
             Else
                 ClrUsed = .biClrUsed
             End If
-        
+
             'ビット数と画像幅からバイト単位画面幅を計算
             GetByteWidth bWidth, bPadding, .biBitCount, .biWidth
             bWidth = bWidth + bPadding
@@ -485,7 +497,7 @@ Private Sub CreateColorMap(ByRef pData() As Long, ByRef bmpInfo As tBITMAPINFO)
     With bmpInfo.infoHeader
         '24bitカラーマップの高さと幅を確定
         ReDim pData(1 To .biHeight, 1 To .biWidth)
-        
+
         'ビット数と画像幅からバイト単位画面幅を計算
         GetByteWidth bWidth, bPadding, .biBitCount, .biWidth
         bWidth = bWidth + bPadding

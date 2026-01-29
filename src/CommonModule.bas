@@ -1,4 +1,19 @@
 Attribute VB_Name = "CommonModule"
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem CommonModule / 共通機能
+Rem --------------------------------------------------------------------------------
+Rem 公開関数/サブルーチン
+Rem   AddArrayText            : 文字列配列への追加
+Rem   GetLastUsedRow          : 指定シートの最終行取得
+Rem   IsBlankRange            : 指定Rangeの空欄判定
+Rem   ReadTextFile            : テキストファイル一括読込(文字コード指定付)
+Rem   ReadBinaryFile          : バイナリファイル一括読込
+Rem   CreateTemporaryFilePath : テンポラリファイルパス生成
+Rem   ConvertBase64           : バイナリのBase64化
+Rem   SplitRGB                : Long型の24bit色を赤緑青に分解
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 Option Private Module
 

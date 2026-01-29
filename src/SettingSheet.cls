@@ -7,6 +7,11 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = True
+Rem --------------------------------------------------------------------------------
+Rem QRCODE-maker
+Rem SettingSheet / 設定シート処理
+Rem --------------------------------------------------------------------------------
+
 Option Explicit
 
 '''ワークシート変更時の処理
